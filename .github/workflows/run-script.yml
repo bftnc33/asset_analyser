@@ -3,6 +3,7 @@ name: Run Trading Bot Hourly
 on:
   schedule:
     - cron: '0 * * * *'  # runs at minute 0 every hour
+  workflow_dispatch:      # allows manual trigger from GitHub UI
 
 jobs:
   run-script:
