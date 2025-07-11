@@ -1,10 +1,11 @@
-import ccxt
+import os
 import pandas as pd
 import ta
-from dotenv import load_dotenv
-import os
+import ccxt
+import yfinance as yf
 import smtplib
 from email.message import EmailMessage
+from dotenv import load_dotenv
 
 # --- LOAD ENVIRONMENT VARIABLES ---
 load_dotenv()
@@ -15,17 +16,18 @@ SMTP_SERVER = os.getenv('SMTP_SERVER')
 SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
 
 # --- CONFIG ---
-symbols = ['BTC/GBP','ETH/GBP','XRP/GBP','SOL/GBP','ADA/GBP','XLM/GBP','SAND/GBP']
+stock_symbols = ['MSTR', 'NVDA']
+crypto_symbols = ['BTC/GBP', 'ETH/GBP', 'XRP/GBP', 'SOL/GBP', 'ADA/GBP', 'XLM/GBP', 'SAND/GBP']
+crypto_exchange = ccxt.kraken()
 timeframe = '1d'
 limit = 100
-exchange = ccxt.kraken()
 
 # --- EMAIL FUNCTION ---
 def send_email(subject, body):
     msg = EmailMessage()
     msg['Subject'] = subject
     msg['From'] = EMAIL_ADDRESS
-    msg['To'] = EMAIL_ADDRESS  # You can add multiple recipients separated by commas
+    msg['To'] = EMAIL_ADDRESS
     msg.set_content(body)
 
     with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as smtp:
@@ -33,11 +35,31 @@ def send_email(subject, body):
         smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         smtp.send_message(msg)
 
-# --- FETCH DATA ---
-def fetch_data(symbol):
-    ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
-    df = pd.DataFrame(ohlcv, columns=['timestamp','open','high','low','close','volume'])
+# --- FETCH FUNCTIONS ---
+def fetch_crypto_data(symbol):
+    ohlcv = crypto_exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    return df
+
+def fetch_stock_data(ticker):
+    df = yf.download(ticker, period='100d', interval='1d', progress=False, auto_adjust=True)
+
+    if df.empty:
+        raise ValueError("No data fetched")
+
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    df.reset_index(inplace=True)
+    df.rename(columns={
+        'Date': 'timestamp',
+        'Close': 'close',
+        'Open': 'open',
+        'High': 'high',
+        'Low': 'low',
+        'Volume': 'volume'
+    }, inplace=True)
     return df
 
 # --- ADD INDICATORS ---
@@ -90,7 +112,6 @@ def generate_signal(df):
     if bearish_engulf and rsi > 30:
         return '⚠️ BEARISH ENGULFING REVERSAL (STRONG SELL)'
 
-    # fallback to trend-based logic
     if latest.sma7 > latest.sma30:
         if latest.close > prev.close:
             if 50 <= rsi < 70:
@@ -102,7 +123,6 @@ def generate_signal(df):
                 return '📉 BULL FLAG: FALLING (WAIT)'
             elif rsi >= 70:
                 return '📉 BULL FLAG: FALLING & OVERBOUGHT (SELL)'
-
     elif latest.sma30 > latest.sma7:
         if latest.close > prev.close:
             if 30 < rsi < 50:
@@ -117,29 +137,47 @@ def generate_signal(df):
 
     return wick_info or '🤷‍♂️ NO CLEAR SIGNAL'
 
+# --- ANALYZE ASSET ---
+def analyze_asset(symbol, df, is_crypto=False):
+    df = add_indicators(df)
+    df.dropna(inplace=True)
+    if len(df) < 2:
+        print(f"{symbol}: Not enough data.")
+        return
+
+    latest = df.iloc[-1]
+    sma7 = float(latest['sma7']) if not isinstance(latest['sma7'], pd.Series) else float(latest['sma7'].iloc[0])
+    sma30 = float(latest['sma30']) if not isinstance(latest['sma30'], pd.Series) else float(latest['sma30'].iloc[0])
+    rsi = float(latest['rsi']) if not isinstance(latest['rsi'], pd.Series) else float(latest['rsi'].iloc[0])
+    price = float(latest['close']) if not isinstance(latest['close'], pd.Series) else float(latest['close'].iloc[0])
+
+    signal = generate_signal(df)
+
+    symbol_display = f"{symbol} (Crypto)" if is_crypto else symbol
+    currency_symbol = "£" if is_crypto else "$"
+
+    output = (f"\n🔹 {symbol_display}:\n"
+              f"   Price: {currency_symbol}{price:,.2f}\n"
+              f"   SMA7: {currency_symbol}{sma7:,.2f} | SMA30: {currency_symbol}{sma30:,.2f} | RSI: {rsi:.2f}\n"
+              f"   Signal: {signal}")
+    print(output)
+
+    if 'STRONG BUY' in signal or 'STRONG SELL' in signal:
+        subject = f"{symbol} Alert: {signal}"
+        send_email(subject, output)
+
 # --- MAIN LOOP ---
 if __name__ == "__main__":
-    for symbol in symbols:
-        df = fetch_data(symbol)
-        df = add_indicators(df)
-        df.dropna(inplace=True)
-        if len(df) < 2:
-            print(f"{symbol}: Not enough data.")
-            continue
+    for symbol in crypto_symbols:
+        try:
+            df = fetch_crypto_data(symbol)
+            analyze_asset(symbol, df, is_crypto=True)
+        except Exception as e:
+            print(f"Error fetching crypto {symbol}: {e}")
 
-        signal = generate_signal(df)
-        price = df.iloc[-1]['close']
-        sma7 = df.iloc[-1]['sma7']
-        sma30 = df.iloc[-1]['sma30']
-        rsi = df.iloc[-1]['rsi']
-
-        output = (f"\n🔹 {symbol}:\n"
-                  f"   Price: £{price:,.2f}\n"
-                  f"   SMA7: £{sma7:,.2f} | SMA30: £{sma30:,.2f} | RSI: {rsi:.2f}\n"
-                  f"   Signal: {signal}")
-
-        print(output)
-
-        if 'STRONG BUY' in signal or 'STRONG SELL' in signal:
-            subject = f"{symbol} Alert: {signal}"
-            send_email(subject, output)
+    for ticker in stock_symbols:
+        try:
+            df = fetch_stock_data(ticker)
+            analyze_asset(ticker, df)
+        except Exception as e:
+            print(f"Error fetching stock {ticker}: {e}")
