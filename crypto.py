@@ -17,7 +17,7 @@ SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
 
 # --- CONFIG ---
 stock_symbols = ['MSTR', 'NVDA']
-crypto_symbols = ['BTC/GBP', 'ETH/GBP', 'XRP/GBP', 'SOL/GBP', 'ADA/GBP', 'XLM/GBP', 'SAND/GBP']
+crypto_symbols = ['BTC/GBP', 'ETH/GBP', 'XRP/GBP', 'SOL/GBP', 'ADA/GBP', 'XLM/GBP', 'SAND/GBP', 'DOGE/GBP']
 crypto_exchange = ccxt.kraken()
 timeframe = '1d'
 limit = 100
