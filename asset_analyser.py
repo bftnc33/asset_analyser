@@ -16,7 +16,7 @@ SMTP_SERVER = os.getenv('SMTP_SERVER')
 SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
 
 # --- CONFIG ---
-stock_symbols = ['MSTR', 'NVDA']
+stock_symbols = ['MSTR', 'NVDA', 'VUAG.L']
 crypto_symbols = ['BTC/GBP', 'ETH/GBP', 'XRP/GBP', 'SOL/GBP', 'ADA/GBP', 'XLM/GBP', 'SAND/GBP', 'DOGE/GBP', 'SUI/GBP']
 crypto_exchange = ccxt.kraken()
 timeframe = '1d'
@@ -154,7 +154,7 @@ def analyze_asset(symbol, df, is_crypto=False):
     signal = generate_signal(df)
 
     symbol_display = f"{symbol} (Crypto)" if is_crypto else symbol
-    currency_symbol = "£" if is_crypto else "$"
+    currency_symbol = "£" if is_crypto or symbol.endswith('.L') else "$"
 
     output = (f"\n🔹 {symbol_display}:\n"
               f"   Price: {currency_symbol}{price:,.2f}\n"
