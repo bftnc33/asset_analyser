@@ -178,11 +178,11 @@ def analyze_asset(symbol, df, is_crypto=False):
               f"   SMA7: {currency_symbol}{sma7:,.2f} | SMA30: {currency_symbol}{sma30:,.2f} | RSI: {rsi:.2f}\n"
               f"   Signal: {signal}")
     print(output)
-    send_telegram(output)
 
     if 'STRONG BUY' in signal or 'STRONG SELL' in signal:
         subject = f"{symbol} Alert: {signal}"
         send_email(subject, output)
+        send_telegram(output)
 
 # --- MAIN LOOP ---
 if __name__ == "__main__":
