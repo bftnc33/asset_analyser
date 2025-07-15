@@ -4,6 +4,7 @@ import ta
 import ccxt
 import yfinance as yf
 import smtplib
+import requests
 from email.message import EmailMessage
 from dotenv import load_dotenv
 
@@ -14,9 +15,11 @@ EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS')
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
 SMTP_SERVER = os.getenv('SMTP_SERVER')
 SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 # --- CONFIG ---
-stock_symbols = ['MSTR', 'NVDA', 'VUAG.L']
+stock_symbols = ['MSTR', 'NVDA', 'VUAG.L', 'COFF.L']
 crypto_symbols = ['BTC/GBP', 'ETH/GBP', 'XRP/GBP', 'SOL/GBP', 'ADA/GBP', 'XLM/GBP', 'SAND/GBP', 'DOGE/GBP', 'SUI/GBP']
 crypto_exchange = ccxt.kraken()
 timeframe = '1d'
@@ -34,6 +37,20 @@ def send_email(subject, body):
         smtp.starttls()
         smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         smtp.send_message(msg)
+
+def send_telegram(message):
+    token = os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    
+    payload = {
+        "chat_id": chat_id,
+        "text": message,
+        "parse_mode": "HTML"  # optional
+    }
+
+    response = requests.post(url, data=payload)
+    response.raise_for_status()
 
 # --- FETCH FUNCTIONS ---
 def fetch_crypto_data(symbol):
@@ -161,6 +178,7 @@ def analyze_asset(symbol, df, is_crypto=False):
               f"   SMA7: {currency_symbol}{sma7:,.2f} | SMA30: {currency_symbol}{sma30:,.2f} | RSI: {rsi:.2f}\n"
               f"   Signal: {signal}")
     print(output)
+    send_telegram(output)
 
     if 'STRONG BUY' in signal or 'STRONG SELL' in signal:
         subject = f"{symbol} Alert: {signal}"
