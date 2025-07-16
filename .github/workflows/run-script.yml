@@ -2,14 +2,14 @@ name: Analyze Market Signals
 
 on:
   schedule:
-    - cron: '0 * * * *' 
-  workflow_dispatch:      # Allows manual run
+    - cron: '0 * * * *'    # Runs hourly
+  workflow_dispatch:       # Allows manual run
 
 jobs:
   analyze:
     runs-on: ubuntu-latest
     env:
-      SIGNAL_FILE: signals.json  # Used in your script to read/write signal history
+      SIGNAL_FILE: signals.json
       EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
       EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
       SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
@@ -36,7 +36,9 @@ jobs:
         id: cache-signals
         with:
           path: signals.json
-          key: signal-cache
+          key: signal-cache-${{ github.run_id }}
+          restore-keys: |
+            signal-cache-
 
       - name: Run analysis script
         run: python asset_analyser.py
@@ -45,4 +47,4 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: signals.json
-          key: signal-cache
+          key: signal-cache-${{ github.run_id }}
