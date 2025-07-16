@@ -1,32 +1,48 @@
-name: Run Trading Bot Hourly
+name: Analyze Market Signals
 
 on:
   schedule:
-    - cron: '0 * * * *'  # runs at minute 0 every hour
-  workflow_dispatch:      # allows manual trigger from GitHub UI
+    - cron: '0 8 * * *'  # Runs daily at 08:00 UTC
+  workflow_dispatch:      # Allows manual run
 
 jobs:
-  run-script:
+  analyze:
     runs-on: ubuntu-latest
+    env:
+      SIGNAL_FILE: signals.json  # Used in your script to read/write signal history
+      EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
+      EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+      SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.12.2'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run script
-        env:
-          EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      - name: Restore cached signals.json
+        uses: actions/cache@v4
+        id: cache-signals
+        with:
+          path: signals.json
+          key: signal-cache
+
+      - name: Run analysis script
         run: python asset_analyser.py
+
+      - name: Save updated signals.json to cache
+        uses: actions/cache/save@v4
+        with:
+          path: signals.json
+          key: signal-cache

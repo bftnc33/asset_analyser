@@ -5,6 +5,7 @@ import ccxt
 import yfinance as yf
 import smtplib
 import requests
+import json
 from email.message import EmailMessage
 from dotenv import load_dotenv
 
@@ -19,11 +20,22 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 # --- CONFIG ---
-stock_symbols = ['MSTR', 'NVDA', 'VUAG.L', 'COFF.L']
-crypto_symbols = ['BTC/GBP', 'ETH/GBP', 'XRP/GBP', 'SOL/GBP', 'ADA/GBP', 'XLM/GBP', 'SAND/GBP', 'DOGE/GBP', 'SUI/GBP', 'LINK/GBP']
+stock_symbols = ['MSTR', 'NVDA', 'VUAG.L', 'COFF.L', 'SGLN.L']
+crypto_symbols = ['BTC/GBP', 'ETH/GBP', 'XRP/GBP', 'SOL/GBP', 'ADA/GBP', 'XLM/GBP', 'SAND/GBP', 'DOGE/GBP', 'SUI/GBP', 'LINK/GBP', 'LTC/GBP']
 crypto_exchange = ccxt.kraken()
 timeframe = '1d'
 limit = 100
+SIGNAL_FILE = "signals.json"
+
+def load_previous_signals():
+    if os.path.exists(SIGNAL_FILE):
+        with open(SIGNAL_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_signals(signals):
+    with open(SIGNAL_FILE, "w") as f:
+        json.dump(signals, f, indent=2)
 
 # --- EMAIL FUNCTION ---
 def send_email(subject, body):
@@ -155,7 +167,7 @@ def generate_signal(df):
     return wick_info or '🤷‍♂️ NO CLEAR SIGNAL'
 
 # --- ANALYZE ASSET ---
-def analyze_asset(symbol, df, is_crypto=False):
+def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=None):
     df = add_indicators(df)
     df.dropna(inplace=True)
     if len(df) < 2:
@@ -163,12 +175,13 @@ def analyze_asset(symbol, df, is_crypto=False):
         return
 
     latest = df.iloc[-1]
-    sma7 = float(latest['sma7']) if not isinstance(latest['sma7'], pd.Series) else float(latest['sma7'].iloc[0])
-    sma30 = float(latest['sma30']) if not isinstance(latest['sma30'], pd.Series) else float(latest['sma30'].iloc[0])
-    rsi = float(latest['rsi']) if not isinstance(latest['rsi'], pd.Series) else float(latest['rsi'].iloc[0])
-    price = float(latest['close']) if not isinstance(latest['close'], pd.Series) else float(latest['close'].iloc[0])
+    sma7 = float(latest['sma7'])
+    sma30 = float(latest['sma30'])
+    rsi = float(latest['rsi'])
+    price = float(latest['close'])
 
     signal = generate_signal(df)
+    new_signals[symbol] = signal  # track current signal
 
     symbol_display = f"{symbol} (Crypto)" if is_crypto else symbol
     currency_symbol = "£" if is_crypto or symbol.endswith('.L') else "$"
@@ -179,23 +192,29 @@ def analyze_asset(symbol, df, is_crypto=False):
               f"   Signal: {signal}")
     print(output)
 
-    if 'STRONG BUY' in signal or 'STRONG SELL' in signal:
-        subject = f"{symbol} Alert: {signal}"
+    # Send alert if signal has changed
+    if prev_signals.get(symbol) != signal:
+        subject = f"{symbol} Signal Changed: {signal}"
         send_email(subject, output)
         send_telegram(output)
 
 # --- MAIN LOOP ---
 if __name__ == "__main__":
+    prev_signals = load_previous_signals()
+    new_signals = {}
+
     for symbol in crypto_symbols:
         try:
             df = fetch_crypto_data(symbol)
-            analyze_asset(symbol, df, is_crypto=True)
+            analyze_asset(symbol, df, is_crypto=True, prev_signals=prev_signals, new_signals=new_signals)
         except Exception as e:
             print(f"Error fetching crypto {symbol}: {e}")
 
     for ticker in stock_symbols:
         try:
             df = fetch_stock_data(ticker)
-            analyze_asset(ticker, df)
+            analyze_asset(ticker, df, is_crypto=False, prev_signals=prev_signals, new_signals=new_signals)
         except Exception as e:
             print(f"Error fetching stock {ticker}: {e}")
+
+    save_signals(new_signals)
