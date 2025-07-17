@@ -98,29 +98,14 @@ def add_indicators(df):
     df['rsi'] = ta.momentum.rsi(df['close'], window=14)
     return df
 
-# --- PRICE ACTION HELPERS ---
-def is_bullish_engulfing(prev, latest):
-    return (prev['close'] < prev['open'] and
-            latest['close'] > latest['open'] and
-            latest['close'] > prev['open'] and
-            latest['open'] < prev['close'])
-
-def is_bearish_engulfing(prev, latest):
-    return (prev['close'] > prev['open'] and
-            latest['close'] < latest['open'] and
-            latest['open'] > prev['close'] and
-            latest['close'] < prev['open'])
-
-def wick_analysis(row):
-    upper_wick = row['high'] - max(row['open'], row['close'])
-    lower_wick = min(row['open'], row['close']) - row['low']
-    body = abs(row['close'] - row['open'])
-
-    if lower_wick > 2 * body:
-        return 'LONG LOWER WICK (BUYING PRESSURE)'
-    elif upper_wick > 2 * body:
-        return 'LONG UPPER WICK (SELLING PRESSURE)'
-    return None
+# --- RSI DESCRIPTION ---
+def describe_rsi(rsi_value):
+    if rsi_value < 30:
+        return "RSI OVERSOLD (Potential Buy Signal)"
+    elif rsi_value > 70:
+        return "RSI OVERBOUGHT (Potential Sell Signal)"
+    else:
+        return "RSI Neutral"
 
 # --- GENERATE SIGNAL ---
 def generate_signal(df):
@@ -128,43 +113,12 @@ def generate_signal(df):
     prev = df.iloc[-2]
     rsi = latest.rsi
 
-    bullish_engulf = is_bullish_engulfing(prev, latest)
-    bearish_engulf = is_bearish_engulfing(prev, latest)
-    wick_info = wick_analysis(latest)
+    flag = "Bull Flag" if latest.sma7 > latest.sma30 else "Bear Flag"
+    trend = "Rising" if latest.close > prev.close else "Falling"
+    
+    rsi_desc = describe_rsi(rsi)
 
-    if bullish_engulf and rsi < 70:
-        if latest.sma7 > latest.sma30:
-            return '🚀 BULLISH ENGULFING REVERSAL (STRONG BUY)'
-        else:
-            return '🚀 BULLISH ENGULFING - (WAIT)'
-
-    if bearish_engulf and rsi > 30:
-        return '⚠️ BEARISH ENGULFING REVERSAL (STRONG SELL)'
-
-    if latest.sma7 > latest.sma30:
-        if latest.close > prev.close:
-            if 50 <= rsi < 70:
-                return '📈 BULL FLAG: SWEET SPOT (BUY)'
-            elif rsi >= 70:
-                return '📈 BULL FLAG: OVERBOUGHT (SELL)'
-        else:
-            if 50 <= rsi < 70:
-                return '📉 BULL FLAG: FALLING (WAIT)'
-            elif rsi >= 70:
-                return '📉 BULL FLAG: FALLING & OVERBOUGHT (SELL)'
-    elif latest.sma30 > latest.sma7:
-        if latest.close > prev.close:
-            if 30 < rsi < 50:
-                return '📉 BEAR FLAG: POTENTIAL REVERSAL (WAIT)'
-            elif rsi <= 30:
-                return '📉 BEAR FLAG: OVERSOLD (BUY)'
-        else:
-            if 30 < rsi < 50:
-                return '📉 BEAR FLAG: FALLING (WAIT)'
-            elif rsi <= 30:
-                return '📉 BEAR FLAG: OVERSOLD & DROPPING (WAIT)'
-
-    return wick_info or '🤷‍♂️ NO CLEAR SIGNAL'
+    return f"{flag} - {trend} | {rsi_desc}"
 
 # --- ANALYZE ASSET ---
 def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=None):
@@ -178,6 +132,7 @@ def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=No
     sma7 = float(latest['sma7'])
     sma30 = float(latest['sma30'])
     rsi = float(latest['rsi'])
+    rsi_desc = describe_rsi(rsi)
     price = float(latest['close'])
 
     signal = generate_signal(df)
@@ -188,7 +143,8 @@ def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=No
 
     output = (f"\n🔹 {symbol_display}:\n"
               f"   Price: {currency_symbol}{price:,.2f}\n"
-              f"   SMA7: {currency_symbol}{sma7:,.2f} | SMA30: {currency_symbol}{sma30:,.2f} | RSI: {rsi:.2f}\n"
+              f"   SMA7: {currency_symbol}{sma7:,.2f} | SMA30: {currency_symbol}{sma30:,.2f}\n"
+              f"   RSI: {rsi:.2f} ({rsi_desc})\n"
               f"   Signal: {signal}")
     print(output)
 
