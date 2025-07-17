@@ -32,19 +32,31 @@ jobs:
           pip install -r requirements.txt
 
       - name: Restore cached signals.json
-        uses: actions/cache@v4
         id: cache-signals
+        uses: actions/cache@v4
         with:
           path: signals.json
-          key: signal-cache-${{ github.run_id }}
+          key: signal-cache
           restore-keys: |
-            signal-cache-
+            signal-cache
+
+      - name: Print signals.json BEFORE analysis
+        if: always()
+        run: |
+          echo "---- signals.json BEFORE ----"
+          cat signals.json || echo "No signals.json found"
 
       - name: Run analysis script
         run: python asset_analyser.py
+
+      - name: Print signals.json AFTER analysis
+        if: always()
+        run: |
+          echo "---- signals.json AFTER ----"
+          cat signals.json || echo "signals.json not created"
 
       - name: Save updated signals.json to cache
         uses: actions/cache/save@v4
         with:
           path: signals.json
-          key: signal-cache-${{ github.run_id }}
+          key: signal-cache
