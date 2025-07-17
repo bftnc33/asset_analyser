@@ -32,36 +32,30 @@ jobs:
           pip install -r requirements.txt
 
       - name: Restore cached signals.json
-        id: cache-signals
+        id: cache-restore
         uses: actions/cache@v4
         with:
           path: signals.json
-          key: signal-cache
+          key: signal-cache-${{ github.sha }}
           restore-keys: |
-            signal-cache
-      
-      - name: Debug env vars
-        run: |
-          echo "EMAIL_ADDRESS is ${EMAIL_ADDRESS:+set}"
-          echo "TELEGRAM_TOKEN is ${TELEGRAM_TOKEN:+set}"
+            signal-cache-
 
-      - name: Print signals.json BEFORE analysis
-        if: always()
+      - name: Before run - Show signals.json
         run: |
-          echo "---- signals.json BEFORE ----"
-          cat signals.json || echo "No signals.json found"
+          echo "🔹 signals.json before run:"
+          cat signals.json || echo "❌ signals.json not found"
 
       - name: Run analysis script
         run: python asset_analyser.py
 
-      - name: Print signals.json AFTER analysis
-        if: always()
+      - name: After run - Show signals.json
         run: |
-          echo "---- signals.json AFTER ----"
-          cat signals.json || echo "signals.json not created"
+          echo "🔹 signals.json after run:"
+          cat signals.json || echo "❌ signals.json not found"
 
       - name: Save updated signals.json to cache
+        if: steps.cache-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: signals.json
-          key: signal-cache
+          key: signal-cache-${{ github.run_id }}-updated
