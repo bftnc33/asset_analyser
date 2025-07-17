@@ -102,10 +102,14 @@ def add_indicators(df):
 def describe_rsi(rsi_value):
     if rsi_value < 30:
         return "RSI OVERSOLD (Potential Buy Signal)"
-    elif rsi_value > 70:
-        return "RSI OVERBOUGHT (Potential Sell Signal)"
-    else:
+    elif 30 <= rsi_value < 40:
+        return "RSI Near Oversold (Watch for Bounce)"
+    elif 40 <= rsi_value <= 60:
         return "RSI Neutral"
+    elif 60 < rsi_value <= 70:
+        return "RSI Near Overbought (Exercise Caution)"
+    else:  # rsi_value > 70
+        return "RSI OVERBOUGHT (Potential Sell Signal)"
 
 # --- GENERATE SIGNAL ---
 def generate_signal(df):
@@ -144,7 +148,7 @@ def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=No
     output = (f"\n🔹 {symbol_display}:\n"
               f"   Price: {currency_symbol}{price:,.2f}\n"
               f"   SMA7: {currency_symbol}{sma7:,.2f} | SMA30: {currency_symbol}{sma30:,.2f}\n"
-              f"   RSI: {rsi:.2f} ({rsi_desc})\n"
+              f"   RSI: {rsi:.2f}\n"
               f"   Signal: {signal}")
     print(output)
 
