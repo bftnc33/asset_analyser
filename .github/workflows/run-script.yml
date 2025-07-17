@@ -39,6 +39,11 @@ jobs:
           key: signal-cache
           restore-keys: |
             signal-cache
+      
+      - name: Debug env vars
+        run: |
+          echo "EMAIL_ADDRESS is ${EMAIL_ADDRESS:+set}"
+          echo "TELEGRAM_TOKEN is ${TELEGRAM_TOKEN:+set}"
 
       - name: Print signals.json BEFORE analysis
         if: always()
