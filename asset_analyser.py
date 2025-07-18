@@ -45,10 +45,14 @@ def send_email(subject, body):
     msg['To'] = EMAIL_ADDRESS
     msg.set_content(body)
 
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as smtp:
-        smtp.starttls()
-        smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        smtp.send_message(msg)
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as smtp:
+            smtp.starttls()
+            smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            smtp.send_message(msg)
+            print("✅ Email sent successfully.")
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")
 
 def send_telegram(message):
     token = os.getenv("TELEGRAM_TOKEN")
