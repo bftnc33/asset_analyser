@@ -31,12 +31,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Restore the most recent matching cache (approximate match using restore-keys)
       - name: Restore cached signals.json
         id: cache-restore
         uses: actions/cache@v4
         with:
           path: signals.json
-          key: signal-cache-${{ github.sha }}
+          key: signal-cache-${{ github.run_id }}
           restore-keys: |
             signal-cache-
 
@@ -53,9 +54,9 @@ jobs:
           echo "🔹 signals.json after run:"
           cat signals.json || echo "❌ signals.json not found"
 
+      # Save cache with a unique key to avoid collision (and allow diff next run)
       - name: Save updated signals.json to cache
-        if: steps.cache-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: signals.json
-          key: signal-cache-${{ github.run_id }}-updated
+          key: signal-cache-${{ github.run_id }}
