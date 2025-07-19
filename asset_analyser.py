@@ -137,11 +137,14 @@ def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=No
         return
 
     latest = df.iloc[-1]
+    previous = df.iloc[-2]
+
     sma7 = float(latest['sma7'])
     sma30 = float(latest['sma30'])
     rsi = float(latest['rsi'])
     rsi_desc = describe_rsi(rsi)
     price = float(latest['close'])
+    prev_close = float(previous['close'])
 
     signal = generate_signal(df)
     new_signals[symbol] = signal  # track current signal
@@ -151,6 +154,7 @@ def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=No
 
     output = (f"\n🔹 {symbol_display}:\n"
               f"   Current Price: {currency_symbol}{price:,.2f}\n"
+              f"   Yesterday's Close: {currency_symbol}{prev_close:,.2f}\n"
               f"   SMA7: {currency_symbol}{sma7:,.2f}\n" 
               f"   SMA30: {currency_symbol}{sma30:,.2f}\n"
               f"   RSI: {rsi:.2f}\n"
