@@ -150,8 +150,9 @@ def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=No
     currency_symbol = "£" if is_crypto or symbol.endswith('.L') else "$"
 
     output = (f"\n🔹 {symbol_display}:\n"
-              f"   Price: {currency_symbol}{price:,.2f}\n"
-              f"   SMA7: {currency_symbol}{sma7:,.2f} | SMA30: {currency_symbol}{sma30:,.2f}\n"
+              f"   Current Price: {currency_symbol}{price:,.2f}\n"
+              f"   SMA7: {currency_symbol}{sma7:,.2f}\n" 
+              f"   SMA30: {currency_symbol}{sma30:,.2f}\n"
               f"   RSI: {rsi:.2f}\n"
               f"   Signal: {signal}")
     print(output)
