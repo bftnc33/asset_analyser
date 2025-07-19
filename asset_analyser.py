@@ -129,7 +129,7 @@ def generate_signal(df):
     return f"{flag} - {trend} | {rsi_desc}"
 
 # --- ANALYZE ASSET ---
-def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=None):
+def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=None, new_alerts=None):
     df = add_indicators(df)
     df.dropna(inplace=True)
     if len(df) < 2:
@@ -158,27 +158,33 @@ def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=No
 
     # Send alert if signal has changed
     if prev_signals.get(symbol) != signal:
-        subject = f"{symbol} Signal Changed: {signal}"
-        send_email(subject, output)
-        send_telegram(output)
+        new_alerts.append(output)  # Accumulate alert message
 
 # --- MAIN LOOP ---
 if __name__ == "__main__":
     prev_signals = load_previous_signals()
     new_signals = {}
+    new_alerts = []  # Collect alerts to send once
 
     for symbol in crypto_symbols:
         try:
             df = fetch_crypto_data(symbol)
-            analyze_asset(symbol, df, is_crypto=True, prev_signals=prev_signals, new_signals=new_signals)
+            analyze_asset(symbol, df, is_crypto=True, prev_signals=prev_signals, new_signals=new_signals, new_alerts=new_alerts)
         except Exception as e:
             print(f"Error fetching crypto {symbol}: {e}")
 
     for ticker in stock_symbols:
         try:
             df = fetch_stock_data(ticker)
-            analyze_asset(ticker, df, is_crypto=False, prev_signals=prev_signals, new_signals=new_signals)
+            analyze_asset(ticker, df, is_crypto=False, prev_signals=prev_signals, new_signals=new_signals, new_alerts=new_alerts)
         except Exception as e:
             print(f"Error fetching stock {ticker}: {e}")
+
+    # If any alerts were generated, send one combined message
+    if new_alerts:
+        full_message = "\n\n".join(new_alerts)
+        subject = f"📈 Market Signal Updates ({len(new_alerts)} changes)"
+        send_email(subject, full_message)
+        send_telegram(full_message)
 
     save_signals(new_signals)
