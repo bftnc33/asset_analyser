@@ -121,12 +121,28 @@ def generate_signal(df):
     prev = df.iloc[-2]
     rsi = latest.rsi
 
-    flag = "Bull Flag" if latest.sma7 > latest.sma30 else "Bear Flag"
-    trend = "Rising" if latest.close > prev.close else "Falling"
+    flag = "📈 Bull Flag" if latest.sma7 > latest.sma30 else "📉 Bear Flag"
+    trend = "🔼 Rising" if latest.close > prev.close else "🔽 Falling"
+    below_sma7 = "⚠️ Price Below SMA7" if latest.close < latest.sma7 else ""
     
     rsi_desc = describe_rsi(rsi)
+    if "OVERSOLD" in rsi_desc:
+        rsi_desc = f"🟢 {rsi_desc}"
+    elif "OVERBOUGHT" in rsi_desc:
+        rsi_desc = f"🔴 {rsi_desc}"
+    elif "Neutral" in rsi_desc:
+        rsi_desc = f"⚪️ {rsi_desc}"
+    else:
+        rsi_desc = f"🟡 {rsi_desc}"
 
-    return f"{flag} - {trend} | {rsi_desc}"
+    # Combine parts, skipping any empty strings
+    parts = [flag, trend]
+    if below_sma7:
+        parts.append(below_sma7)
+    parts.append(rsi_desc)
+
+    return " | ".join(parts)
+
 
 # --- ANALYZE ASSET ---
 def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=None, new_alerts=None):
