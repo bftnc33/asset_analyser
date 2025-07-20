@@ -100,6 +100,7 @@ def add_indicators(df):
     df['sma7'] = ta.trend.sma_indicator(df['close'], window=7)
     df['sma30'] = ta.trend.sma_indicator(df['close'], window=30)
     df['rsi'] = ta.momentum.rsi(df['close'], window=14)
+    df['vol_avg'] = df['volume'].rolling(window=20).mean()  # 20-day average volume
     return df
 
 # --- RSI DESCRIPTION ---
@@ -119,7 +120,7 @@ def describe_rsi(rsi_value):
 def generate_signal(df):
     latest = df.iloc[-1]
     prev = df.iloc[-2]
-    
+
     # SMA values
     sma7 = latest.sma7
     sma30 = latest.sma30
@@ -138,24 +139,33 @@ def generate_signal(df):
     else:
         rsi_desc = f"🟡 {rsi_desc}"
 
-    # Flag and trend
+    # Flags
     flag = "📈 Bull Flag" if sma7 > sma30 else "📉 Bear Flag"
     trend = "🔼 Rising" if latest.close > prev.close else "🔽 Falling"
     below_sma7 = "⚠️ Price Below SMA7" if latest.close < sma7 else ""
 
-    # Detect SMA crossover
+    # Crossover detection
     crossover = ""
     if prev_sma7 < prev_sma30 and sma7 > sma30:
         crossover = "✨ Golden Cross (SMA7 ↑ SMA30)"
     elif prev_sma7 > prev_sma30 and sma7 < sma30:
         crossover = "⚠️ Death Cross (SMA7 ↓ SMA30)"
 
-    # Assemble parts
+    # Volume spike detection
+    vol = latest.volume
+    avg_vol = latest.vol_avg
+    volume_spike = ""
+    if avg_vol and vol > avg_vol * 1.5:  # 50% above average
+        volume_spike = f"📊 Volume Spike ({vol:,.0f} vs avg {avg_vol:,.0f})"
+
+    # Build signal
     parts = [flag, trend]
     if below_sma7:
         parts.append(below_sma7)
     if crossover:
         parts.append(crossover)
+    if volume_spike:
+        parts.append(volume_spike)
     parts.append(rsi_desc)
 
     return " | ".join(parts)
