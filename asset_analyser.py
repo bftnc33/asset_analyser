@@ -119,12 +119,15 @@ def describe_rsi(rsi_value):
 def generate_signal(df):
     latest = df.iloc[-1]
     prev = df.iloc[-2]
-    rsi = latest.rsi
-
-    flag = "📈 Bull Flag" if latest.sma7 > latest.sma30 else "📉 Bear Flag"
-    trend = "🔼 Rising" if latest.close > prev.close else "🔽 Falling"
-    below_sma7 = "⚠️ Price Below SMA7" if latest.close < latest.sma7 else ""
     
+    # SMA values
+    sma7 = latest.sma7
+    sma30 = latest.sma30
+    prev_sma7 = prev.sma7
+    prev_sma30 = prev.sma30
+
+    # RSI logic
+    rsi = latest.rsi
     rsi_desc = describe_rsi(rsi)
     if "OVERSOLD" in rsi_desc:
         rsi_desc = f"🟢 {rsi_desc}"
@@ -135,14 +138,27 @@ def generate_signal(df):
     else:
         rsi_desc = f"🟡 {rsi_desc}"
 
-    # Combine parts, skipping any empty strings
+    # Flag and trend
+    flag = "📈 Bull Flag" if sma7 > sma30 else "📉 Bear Flag"
+    trend = "🔼 Rising" if latest.close > prev.close else "🔽 Falling"
+    below_sma7 = "⚠️ Price Below SMA7" if latest.close < sma7 else ""
+
+    # Detect SMA crossover
+    crossover = ""
+    if prev_sma7 < prev_sma30 and sma7 > sma30:
+        crossover = "✨ Golden Cross (SMA7 ↑ SMA30)"
+    elif prev_sma7 > prev_sma30 and sma7 < sma30:
+        crossover = "⚠️ Death Cross (SMA7 ↓ SMA30)"
+
+    # Assemble parts
     parts = [flag, trend]
     if below_sma7:
         parts.append(below_sma7)
+    if crossover:
+        parts.append(crossover)
     parts.append(rsi_desc)
 
     return " | ".join(parts)
-
 
 # --- ANALYZE ASSET ---
 def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=None, new_alerts=None):
