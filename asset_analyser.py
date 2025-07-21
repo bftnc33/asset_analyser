@@ -19,9 +19,14 @@ SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+# --- LOAD TRACKED SYMBOLS ---
+def load_symbols(file_path="symbols.json"):
+    with open(file_path, "r") as f:
+        data = json.load(f)
+    return data.get("stocks", []), data.get("crypto", [])
+
 # --- CONFIG ---
-stock_symbols = ['MSTR', 'VUAG.L', 'COFF.L', 'SGLN.L']
-crypto_symbols = ['BTC/GBP', 'ETH/GBP', 'XRP/GBP', 'SOL/GBP', 'ADA/GBP', 'XLM/GBP', 'SAND/GBP', 'DOGE/GBP', 'SUI/GBP', 'LINK/GBP', 'LTC/GBP']
+stock_symbols, crypto_symbols = load_symbols()
 crypto_exchange = ccxt.kraken()
 timeframe = '1d'
 limit = 100
