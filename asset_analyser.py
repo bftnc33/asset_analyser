@@ -156,12 +156,18 @@ def generate_signal(df):
     elif prev_sma7 > prev_sma30 and sma7 < sma30:
         crossover = "⚠️ Death Cross (SMA7 ↓ SMA30)"
 
-    # Volume spike detection
+    # Volume spike tiered description
     vol = latest.volume
     avg_vol = latest.vol_avg
     volume_spike = ""
-    if avg_vol and vol > avg_vol * 1.5:  # 50% above average
-        volume_spike = f"📊 Volume Spike ({vol:,.0f} vs avg {avg_vol:,.0f})"
+    if avg_vol and avg_vol > 0:
+        spike_ratio = vol / avg_vol
+        if spike_ratio > 2:
+            volume_spike = "📊 Volume Spike: 🚨 Severe"
+        elif spike_ratio > 1.5:
+            volume_spike = "📊 Volume Spike: ⚠️ Moderate"
+        elif spike_ratio > 1.2:
+            volume_spike = "📊 Volume Spike: ⚪️ Mild"
 
     # Build signal
     parts = [flag, trend]
