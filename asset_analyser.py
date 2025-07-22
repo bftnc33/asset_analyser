@@ -181,6 +181,24 @@ def generate_signal(df):
 
     return " | ".join(parts)
 
+def diff_signal_parts(old_signal, new_signal):
+    if not old_signal:
+        return "🆕 First-time signal."
+
+    old_parts = set(old_signal.split(" | "))
+    new_parts = set(new_signal.split(" | "))
+
+    added = new_parts - old_parts
+    removed = old_parts - new_parts
+
+    changes = []
+    if added:
+        changes.append("🟢 Added: " + ", ".join(added))
+    if removed:
+        changes.append("🔴 Removed: " + ", ".join(removed))
+    
+    return "\n   ↪️ Changes: " + " | ".join(changes) if changes else ""
+
 # --- ANALYZE ASSET ---
 def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=None, new_alerts=None):
     df = add_indicators(df)
@@ -216,7 +234,9 @@ def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=No
 
     # Send alert if signal has changed
     if prev_signals.get(symbol) != signal:
-        new_alerts.append(output)  # Accumulate alert message
+        change_log = diff_signal_parts(prev_signals.get(symbol), signal)
+        new_alerts.append(output + change_log)
+
 
 # --- MAIN LOOP ---
 if __name__ == "__main__":
