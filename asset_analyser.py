@@ -223,11 +223,14 @@ def analyze_asset(symbol, df, is_crypto=False, prev_signals=None, new_signals=No
     symbol_display = f"{symbol} (Crypto)" if is_crypto else symbol
     currency_symbol = "£" if is_crypto or symbol.endswith('.L') else "$"
 
+    # Determine price format based on asset price
+    price_fmt = "{:,.4f}" if price < 1 else "{:,.2f}"
+
     output = (f"\n🔹 {symbol_display}:\n"
-              f"   Current Price: {currency_symbol}{price:,.2f}\n"
-              f"   Yesterday's Close: {currency_symbol}{prev_close:,.2f}\n"
-              f"   SMA7: {currency_symbol}{sma7:,.2f}\n" 
-              f"   SMA30: {currency_symbol}{sma30:,.2f}\n"
+              f"   Current Price: {currency_symbol}{price_fmt.format(price)}\n"
+              f"   Yesterday's Close: {currency_symbol}{price_fmt.format(prev_close)}\n"
+              f"   SMA7: {currency_symbol}{price_fmt.format(sma7)}\n"
+              f"   SMA30: {currency_symbol}{price_fmt.format(sma30)}\n"
               f"   RSI: {rsi:.2f}\n"
               f"   Signal: {signal}")
     print(output)
