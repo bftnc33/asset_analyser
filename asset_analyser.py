@@ -120,15 +120,15 @@ def add_indicators(df):
 # --- RSI DESCRIPTION ---
 def describe_rsi(rsi_value):
     if rsi_value < 30:
-        return "🟢 RSI OVERSOLD (Potential Buy Signal)"
+        return "🟢 RSI OVERSOLD (Consider Buying)"
     elif rsi_value < 40:
-        return "🟡 RSI Near Oversold (Watch for Bounce)"
+        return "🟡 RSI Near Oversold (Monitor)"
     elif rsi_value <= 60:
         return "⚪️ RSI Neutral"
     elif rsi_value <= 70:
-        return "🟡 RSI Near Overbought (Exercise Caution)"
+        return "🟡 RSI Near Overbought (Monitor)"
     else:
-        return "🔴 RSI OVERBOUGHT (Potential Sell Signal)"
+        return "🔴 RSI OVERBOUGHT (Consider Selling)"
 
 # --- SIGNAL GENERATION ---
 def generate_signal(df, latest, prev, rsi_desc):
