@@ -137,7 +137,7 @@ def generate_signal(df, latest, prev, rsi_desc):
 
     flag = "📈 Bull Flag" if sma7 > sma30 else "📉 Bear Flag"
     trend = "🔼 Rising" if latest.close > prev.close else "🔽 Falling"
-    below_sma7 = "⚠️ Price >1.5% Below SMA7" if latest.close < sma7 * 0.985 else ""
+    price_vs_sma7 = "✅ Price ABOVE SMA7" if latest.close > sma7 else "🔻 Price BELOW SMA7"
 
     crossover = ""
     if prev_sma7 < prev_sma30 and sma7 > sma30:
@@ -154,9 +154,7 @@ def generate_signal(df, latest, prev, rsi_desc):
     elif spike_ratio > 1.2:
         volume_spike = "📊 Volume Spike: ⚪️ Mild"
 
-    parts = [flag, trend]
-    if below_sma7:
-        parts.append(below_sma7)
+    parts = [flag, trend, price_vs_sma7]
     if crossover:
         parts.append(crossover)
     if volume_spike:
