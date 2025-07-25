@@ -168,10 +168,14 @@ def generate_signal(df, latest, prev, rsi_desc):
 # --- DIFFERENCE CHECK ---
 def diff_signal_parts(old_signal, new_signal):
     if not old_signal:
-        return ""  # First-time signal, no need to diff
+        return new_signal  # First-time signal, return as-is
 
-    old_parts = [line.strip("• ").strip() for line in old_signal.strip().split("\n") if line.strip()]
-    new_parts = [line.strip("• ").strip() for line in new_signal.strip().split("\n") if line.strip()]
+    # Normalize and clean lines for comparison
+    def clean_parts(text):
+        return [line.strip().lstrip("•").strip() for line in text.strip().splitlines() if line.strip()]
+
+    old_parts = clean_parts(old_signal)
+    new_parts = clean_parts(new_signal)
 
     output_parts = []
     for new_line in new_parts:
@@ -179,11 +183,11 @@ def diff_signal_parts(old_signal, new_signal):
         matched_old = next((o for o in old_parts if o.startswith(prefix)), None)
 
         if matched_old and matched_old != new_line:
-            formatted = f"• <b>{new_line}</b> <i>(was: {matched_old})</i>"
+            formatted = f"<b>{new_line}</b> <i>(was: {matched_old})</i>"
         else:
-            formatted = f"• {new_line}"
+            formatted = new_line
 
-        output_parts.append(formatted)
+        output_parts.append(f"• {formatted}")
 
     return "\n   " + "\n   ".join(output_parts)
 
