@@ -53,7 +53,9 @@ def send_email(subject, body):
     msg['Subject'] = subject
     msg['From'] = EMAIL_ADDRESS
     msg['To'] = EMAIL_ADDRESS
-    msg.set_content(body)
+    msg.set_content("This email requires an HTML-capable viewer.")
+    msg.add_alternative(body, subtype='html')
+
     try:
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as smtp:
             smtp.starttls()
@@ -166,17 +168,24 @@ def generate_signal(df, latest, prev, rsi_desc):
 # --- DIFFERENCE CHECK ---
 def diff_signal_parts(old_signal, new_signal):
     if not old_signal:
-        return "\n   ↪️ 🆕 First-time signal."
-    old_parts = set(old_signal.split("\n   • "))
-    new_parts = set(new_signal.split("\n   • "))
-    added = new_parts - old_parts
-    removed = old_parts - new_parts
-    changes = []
-    if added:
-        changes.append("🟢 Added: " + ", ".join(added))
-    if removed:
-        changes.append("🔴 Removed: " + ", ".join(removed))
-    return "\n   ↪️ " + " | ".join(changes) if changes else ""
+        return ""  # First-time signal, no need to diff
+
+    old_parts = [line.strip("• ").strip() for line in old_signal.strip().split("\n") if line.strip()]
+    new_parts = [line.strip("• ").strip() for line in new_signal.strip().split("\n") if line.strip()]
+
+    output_parts = []
+    for new_line in new_parts:
+        prefix = new_line.split()[0] if new_line else ""
+        matched_old = next((o for o in old_parts if o.startswith(prefix)), None)
+
+        if matched_old and matched_old != new_line:
+            formatted = f"• <b>{new_line}</b> <i>(was: {matched_old})</i>"
+        else:
+            formatted = f"• {new_line}"
+
+        output_parts.append(formatted)
+
+    return "\n   " + "\n   ".join(output_parts)
 
 # --- FORMAT OUTPUT ---
 def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto):
@@ -208,8 +217,9 @@ def analyze_asset(symbol, df, is_crypto, prev_signals, new_signals, new_alerts):
     logging.info(output)
 
     if prev_signals.get(symbol) != signal:
-        changes = diff_signal_parts(prev_signals.get(symbol), signal)
-        new_alerts.append(output + changes)
+        formatted_signal = diff_signal_parts(prev_signals.get(symbol), signal)
+        updated_output = format_output(symbol, latest, prev, formatted_signal, rsi_desc, is_crypto)
+        new_alerts.append(updated_output)
 
 # --- MAIN LOOP ---
 if __name__ == "__main__":
@@ -236,7 +246,7 @@ if __name__ == "__main__":
     if new_alerts:
         message = "\n\n".join(new_alerts)
         subject = f"📈 Market Signal Updates ({len(new_alerts)} changes)"
-        send_email(subject, message)
+        send_email(subject, message.replace("\n", "<br>"))
         send_telegram(message)
 
     save_signals(new_signals)
