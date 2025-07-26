@@ -7,6 +7,7 @@ import ccxt
 import yfinance as yf
 import smtplib
 import requests
+import re
 from email.message import EmailMessage
 from dotenv import load_dotenv
 
@@ -28,6 +29,12 @@ SIGNAL_FILE = "signals.json"
 crypto_exchange = ccxt.kraken()
 timeframe = '1d'
 limit = 100
+
+def strip_html_tags(text):
+    # Replace <br> tags with actual line breaks
+    text = text.replace("<br>", "\n")
+    # Remove all other HTML tags
+    return re.sub(r'<[^>]+>', '', text)
 
 # --- LOAD SYMBOLS ---
 def load_symbols(file_path="symbols.json"):
@@ -196,13 +203,13 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto):
     currency = "£" if is_crypto or symbol.endswith(".L") else "$"
     price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
 
-    return (f"\n🔹 {symbol} ({'Crypto' if is_crypto else 'Stock'}):\n"
-            f"   Current Price: {currency}{price_fmt.format(latest.close)}\n"
-            f"   Yesterday's Close: {currency}{price_fmt.format(previous.close)}\n"
-            f"   SMA7: {currency}{price_fmt.format(latest.sma7)}\n"
-            f"   SMA30: {currency}{price_fmt.format(latest.sma30)}\n"
-            f"   RSI: {latest.rsi:.2f}\n"
-            f"   Signal: {signal}")
+    return (f"<b>🔹 {symbol}</b> ({'Crypto' if is_crypto else 'Stock'}):<br>"
+            f"Current Price: {currency}{price_fmt.format(latest.close)}<br>"
+            f"Yesterday's Close: {currency}{price_fmt.format(previous.close)}<br>"
+            f"SMA7: {currency}{price_fmt.format(latest.sma7)}<br>"
+            f"SMA30: {currency}{price_fmt.format(latest.sma30)}<br>"
+            f"RSI: {latest.rsi:.2f}<br>"
+            f"<br><b>Signal:</b><br>{signal}")
 
 # --- ANALYZE ASSET ---
 def analyze_asset(symbol, df, is_crypto, prev_signals, new_signals, new_alerts):
@@ -218,7 +225,7 @@ def analyze_asset(symbol, df, is_crypto, prev_signals, new_signals, new_alerts):
     new_signals[symbol] = signal
 
     output = format_output(symbol, latest, prev, signal, rsi_desc, is_crypto)
-    logging.info(output)
+    logging.info(strip_html_tags(output))
 
     if prev_signals.get(symbol) != signal:
         formatted_signal = diff_signal_parts(prev_signals.get(symbol), signal)
