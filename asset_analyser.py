@@ -167,11 +167,11 @@ def generate_signal(df, latest, prev, rsi_desc):
 
 # --- DIFFERENCE CHECK ---
 def diff_signal_parts(old_signal, new_signal):
-    def extract_items(text):
-        return set(part.strip() for part in text.strip().split("|") if part.strip())
-
     if not old_signal:
-        return new_signal.strip(), ""
+        return new_signal, ""
+
+    def extract_items(text):
+        return set(part.strip() for part in text.strip().split("|"))
 
     old_items = extract_items(old_signal)
     new_items = extract_items(new_signal)
@@ -188,7 +188,9 @@ def diff_signal_parts(old_signal, new_signal):
     if removed:
         changes.append("🔴 Removed: " + " | ".join(sorted(removed)))
 
-    changes_line = f"↪️ Changes: {' | '.join(changes)}" if changes else ""
+    changes_line = ""
+    if changes:
+        changes_line = f"↪️ Changes: {' | '.join(changes)}"
 
     return signal_line, changes_line
 
