@@ -171,20 +171,22 @@ def diff_signal_parts(old_signal, new_signal):
         return new_signal, ""
 
     def extract_items(text):
-        return set(part.strip() for part in text.strip().split("|"))
+        return [part.strip() for part in text.strip().split("|") if part.strip()]
 
-    old_items = extract_items(old_signal)
-    new_items = extract_items(new_signal)
+    old_items = set(extract_items(old_signal))
+    new_items_list = extract_items(new_signal)
+    new_items_set = set(new_items_list)
 
-    added = new_items - old_items
-    removed = old_items - new_items
-    unchanged = new_items & old_items
+    added = new_items_set - old_items
+    removed = old_items - new_items_set
+    unchanged = new_items_set & old_items
 
-    signal_line = " | ".join(sorted(unchanged.union(added)))
+    # Keep only added + unchanged in original order
+    signal_line = " | ".join([part for part in new_items_list if part in added or part in unchanged])
 
     changes = []
     if added:
-        changes.append("🟢 Added: " + " | ".join(sorted(added)))
+        changes.append("🟢 Added: " + " | ".join([part for part in new_items_list if part in added]))
     if removed:
         changes.append("🔴 Removed: " + " | ".join(sorted(removed)))
 
