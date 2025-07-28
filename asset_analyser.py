@@ -163,33 +163,34 @@ def generate_signal(df, latest, prev, rsi_desc):
         parts.append(volume_spike)
     parts.append(rsi_desc)
 
-    return "\n   • " + "\n   • ".join(parts)
+    return " | ".join(parts)
 
 # --- DIFFERENCE CHECK ---
 def diff_signal_parts(old_signal, new_signal):
+    def extract_items(text):
+        return set(part.strip() for part in text.strip().split("|") if part.strip())
+
     if not old_signal:
-        return new_signal  # First-time signal, return as-is
+        return new_signal.strip(), ""
 
-    # Normalize and clean lines for comparison
-    def clean_parts(text):
-        return [line.strip().lstrip("•").strip() for line in text.strip().splitlines() if line.strip()]
+    old_items = extract_items(old_signal)
+    new_items = extract_items(new_signal)
 
-    old_parts = clean_parts(old_signal)
-    new_parts = clean_parts(new_signal)
+    added = new_items - old_items
+    removed = old_items - new_items
+    unchanged = new_items & old_items
 
-    output_parts = []
-    for new_line in new_parts:
-        prefix = new_line.split()[0] if new_line else ""
-        matched_old = next((o for o in old_parts if o.startswith(prefix)), None)
+    signal_line = " | ".join(sorted(unchanged.union(added)))
 
-        if matched_old and matched_old != new_line:
-            formatted = f"<b>{new_line}</b> <i>(was: {matched_old})</i>"
-        else:
-            formatted = new_line
+    changes = []
+    if added:
+        changes.append("🟢 Added: " + " | ".join(sorted(added)))
+    if removed:
+        changes.append("🔴 Removed: " + " | ".join(sorted(removed)))
 
-        output_parts.append(f"• {formatted}")
+    changes_line = f"↪️ Changes: {' | '.join(changes)}" if changes else ""
 
-    return "\n   " + "\n   ".join(output_parts)
+    return signal_line, changes_line
 
 # --- FORMAT OUTPUT ---
 def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto):
@@ -214,16 +215,24 @@ def analyze_asset(symbol, df, is_crypto, prev_signals, new_signals, new_alerts):
 
     latest, prev = df.iloc[-1], df.iloc[-2]
     rsi_desc = describe_rsi(latest.rsi)
-    signal = generate_signal(df, latest, prev, rsi_desc)
-    new_signals[symbol] = signal
+    new_signal_raw = generate_signal(df, latest, prev, rsi_desc)
 
-    output = format_output(symbol, latest, prev, signal, rsi_desc, is_crypto)
+    old_signal = prev_signals.get(symbol)
+    signal_line, changes_line = diff_signal_parts(old_signal, new_signal_raw)
+
+    # Always build full signal (with or without changes)
+    if changes_line:
+        full_signal = f"{signal_line}\n   {changes_line}"
+    else:
+        full_signal = signal_line
+
+    # Always store the raw signal for next time (not the diffed one)
+    new_signals[symbol] = new_signal_raw
+    output = format_output(symbol, latest, prev, full_signal, rsi_desc, is_crypto)
     logging.info(output)
 
-    if prev_signals.get(symbol) != signal:
-        formatted_signal = diff_signal_parts(prev_signals.get(symbol), signal)
-        updated_output = format_output(symbol, latest, prev, formatted_signal, rsi_desc, is_crypto)
-        new_alerts.append(updated_output)
+    if old_signal != new_signal_raw:
+        new_alerts.append(output)
 
 # --- MAIN LOOP ---
 if __name__ == "__main__":
