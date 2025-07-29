@@ -47,7 +47,7 @@ jobs:
           cat signals.json || echo "❌ signals.json not found"
 
       - name: Run analysis script
-        run: python asset_analyser.py
+        run: python main.py
 
       - name: After run - Show signals.json
         run: |
