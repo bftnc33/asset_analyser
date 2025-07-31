@@ -200,10 +200,13 @@ def diff_signal_parts(old_signal, new_signal):
 def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto):
     currency = "£" if is_crypto or symbol.endswith(".L") else "$"
     price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
+    price_change = ((latest.close - previous.close) / previous.close) * 100
+    change_color = "🟢" if price_change > 0 else "🔴" if price_change < 0 else "⚪️"
 
     return (f"\n🔹 {symbol} ({'Crypto' if is_crypto else 'Stock'}):\n"
             f"   Current Price: {currency}{price_fmt.format(latest.close)}\n"
             f"   Yesterday's Close: {currency}{price_fmt.format(previous.close)}\n"
+            f"   Price Change: {change_color} {price_change:+.2f}%\n"
             f"   SMA7: {currency}{price_fmt.format(latest.sma7)}\n"
             f"   SMA30: {currency}{price_fmt.format(latest.sma30)}\n"
             f"   RSI: {latest.rsi:.2f}\n"
