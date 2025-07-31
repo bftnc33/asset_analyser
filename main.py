@@ -156,12 +156,20 @@ def generate_signal(df, latest, prev, rsi_desc):
     elif spike_ratio > 1.2:
         volume_spike = "📊 Volume Spike: ⚪️ Mild"
 
+    rsi_change = latest.rsi - prev.rsi
+    rsi_momentum = ""
+    if abs(rsi_change) > 5:
+        direction = "↗️ Accelerating" if rsi_change > 0 else "↘️ Decelerating"
+        rsi_momentum = f"RSI {direction}"
+
     parts = [flag, trend, price_vs_sma7]
     if crossover:
         parts.append(crossover)
     if volume_spike:
         parts.append(volume_spike)
     parts.append(rsi_desc)
+    if rsi_momentum:
+        parts.append(rsi_momentum)
 
     return " | ".join(parts)
 
