@@ -2,7 +2,7 @@ name: Analyze Market Signals
 
 on:
   schedule:
-    - cron: '0 8-20 * * *'  
+    - cron: '0 9,13,17 * * *'  
   workflow_dispatch:       # Allows manual run
 
 jobs:
