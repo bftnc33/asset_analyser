@@ -26,3 +26,7 @@ clean:
 	@echo "🧹 Cleaning up..."
 	rm -rf $(VENV_DIR)
 	rm -rf __pycache__
+
+lint:
+	@echo "Checking linting using ruff..."
+	ruff check main.py
