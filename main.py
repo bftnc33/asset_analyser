@@ -139,7 +139,8 @@ def generate_signal(df, latest, prev, rsi_desc):
 
     flag = "📈 Bull Flag" if sma7 > sma30 else "📉 Bear Flag"
     trend = "🔼 Rising" if latest.close > prev.close else "🔽 Falling"
-    price_vs_sma7 = "✅ Price ABOVE SMA7" if latest.close > sma7 else "🔻 Price BELOW SMA7"
+    price_vs_sma7 = "✅ Price ABOVE SMA7" if latest.close > sma7 else "🔻 Price BELOW SMA7" 
+    price_vs_sma30 = "✅ Price ABOVE SMA30" if latest.close > sma30 else "🔻 Price BELOW SMA30"
 
     crossover = ""
     if prev_sma7 < prev_sma30 and sma7 > sma30:
@@ -162,7 +163,7 @@ def generate_signal(df, latest, prev, rsi_desc):
         direction = "↗️ Accelerating" if rsi_change > 0 else "↘️ Decelerating"
         rsi_momentum = f"RSI {direction}"
 
-    parts = [flag, trend, price_vs_sma7]
+    parts = [flag, trend, price_vs_sma7, price_vs_sma30]  # Added price_vs_sma30
     if crossover:
         parts.append(crossover)
     if volume_spike:
