@@ -206,18 +206,45 @@ def diff_signal_parts(old_signal, new_signal):
     return signal_line, changes_line
 
 # --- FORMAT OUTPUT ---
+# --- FORMAT OUTPUT ---
 def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto):
-    currency = "£" if is_crypto or symbol.endswith(".L") else "$"
-    price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
-    price_change = ((latest.close - previous.close) / previous.close) * 100
+    # Determine currency and formatting
+    if symbol.endswith(".L"):
+        currency = "£"
+        suffix = ""
+        # Convert pence to pounds by dividing by 100
+        current_close = latest.close / 100
+        previous_close = previous.close / 100
+        sma7 = latest.sma7 / 100
+        sma30 = latest.sma30 / 100
+        price_fmt = "{:,.4f}" if current_close < 1 else "{:,.2f}"
+    elif is_crypto:
+        # Crypto in GBP
+        currency = "£"
+        suffix = ""
+        price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
+        current_close = latest.close
+        previous_close = previous.close
+        sma7 = latest.sma7
+        sma30 = latest.sma30
+    else:
+        # US stocks in USD
+        currency = "$"
+        suffix = ""
+        price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
+        current_close = latest.close
+        previous_close = previous.close
+        sma7 = latest.sma7
+        sma30 = latest.sma30
+    
+    price_change = ((current_close - previous_close) / previous_close) * 100
     change_color = "🟢" if price_change > 0 else "🔴" if price_change < 0 else "⚪️"
-
     return (f"\n🔹 {symbol} ({'Crypto' if is_crypto else 'Stock'}):\n"
-            f"   Current Price: {currency}{price_fmt.format(latest.close)}\n"
-            f"   Yesterday's Close: {currency}{price_fmt.format(previous.close)}\n"
+            f"   Current Price: {currency}{price_fmt.format(current_close)}{suffix}\n"
+            f"   Yesterday's Close: {currency}{price_fmt.format(previous_close)}{suffix}\n"
             f"   Price Change: {change_color} {price_change:+.2f}%\n"
-            f"   SMA7: {currency}{price_fmt.format(latest.sma7)}\n"
-            f"   SMA30: {currency}{price_fmt.format(latest.sma30)}\n"
+            f"   SMA7: {currency}{price_fmt.format(sma7)}{suffix}\n"
+            f"   SMA30: {currency}{price_fmt.format(sma30)}{suffix}\n"
             f"   RSI: {latest.rsi:.2f}\n"
             f"   Signal: {signal}")
 
