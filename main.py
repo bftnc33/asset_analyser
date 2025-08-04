@@ -177,10 +177,12 @@ def generate_signal(df, latest, prev, rsi_desc):
 # --- DIFFERENCE CHECK ---
 def diff_signal_parts(old_signal, new_signal):
     if not old_signal:
-        return new_signal, ""
+        return new_signal
 
     def extract_items(text):
-        return [part.strip() for part in text.strip().split("|") if part.strip()]
+        # Clean any existing changes info
+        clean_text = text.split("↪️ Changes:")[0].strip() if "↪️ Changes:" in text else text
+        return [part.strip() for part in clean_text.split("|") if part.strip()]
 
     old_items = set(extract_items(old_signal))
     new_items_list = extract_items(new_signal)
@@ -188,26 +190,30 @@ def diff_signal_parts(old_signal, new_signal):
 
     added = new_items_set - old_items
     removed = old_items - new_items_set
-    unchanged = new_items_set & old_items
 
-    # Keep only added + unchanged in original order
-    signal_line = " | ".join([part for part in new_items_list if part in added or part in unchanged])
-
-    changes = []
-    if added:
-        changes.append("🟢 Added: " + " | ".join([part for part in new_items_list if part in added]))
-    if removed:
-        changes.append("🔴 Removed: " + " | ".join(sorted(removed)))
-
-    changes_line = ""
-    if changes:
-        changes_line = f"↪️ Changes: {' | '.join(changes)}"
-
-    return signal_line, changes_line
+    # Build signal with (was: old_value) for changed items
+    enhanced_signal_parts = []
+    
+    for new_item in new_items_list:
+        enhanced_part = new_item
+        
+        # Check if this new item replaces an old one (same category)
+        for old_item in removed:
+            # Check for similar categories that should show "was:" format
+            if (('Bull Flag' in new_item or 'Bear Flag' in new_item) and ('Bull Flag' in old_item or 'Bear Flag' in old_item)) or \
+               (('Rising' in new_item or 'Falling' in new_item) and ('Rising' in old_item or 'Falling' in old_item)) or \
+               (('ABOVE SMA7' in new_item or 'BELOW SMA7' in new_item) and ('ABOVE SMA7' in old_item or 'BELOW SMA7' in old_item)) or \
+               (('ABOVE SMA30' in new_item or 'BELOW SMA30' in new_item) and ('ABOVE SMA30' in old_item or 'BELOW SMA30' in old_item)) or \
+               (('RSI' in new_item and 'RSI' in old_item)):
+                enhanced_part = f"{new_item} (was: {old_item})"
+                break
+        
+        enhanced_signal_parts.append(enhanced_part)
+    
+    return " | ".join(enhanced_signal_parts)
 
 # --- FORMAT OUTPUT ---
-# --- FORMAT OUTPUT ---
-def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto):
+def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes=None):
     # Determine currency and formatting
     if symbol.endswith(".L"):
         currency = "£"
@@ -239,6 +245,16 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto):
     
     price_change = ((current_close - previous_close) / previous_close) * 100
     change_color = "🟢" if price_change > 0 else "🔴" if price_change < 0 else "⚪️"
+    
+    # Clean the signal first - remove any existing changes line
+    clean_signal = signal
+    if "↪️ Changes:" in signal:
+        clean_signal = signal.split("↪️ Changes:")[0].strip()
+    
+    # Split signal elements and put each on a new line
+    signal_parts = clean_signal.split(' | ')
+    formatted_signal = '\n'.join([f"     {part.strip()}" for part in signal_parts if part.strip()])
+    
     return (f"\n🔹 {symbol} ({'Crypto' if is_crypto else 'Stock'}):\n"
             f"   Current Price: {currency}{price_fmt.format(current_close)}{suffix}\n"
             f"   Yesterday's Close: {currency}{price_fmt.format(previous_close)}{suffix}\n"
@@ -246,7 +262,7 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto):
             f"   SMA7: {currency}{price_fmt.format(sma7)}{suffix}\n"
             f"   SMA30: {currency}{price_fmt.format(sma30)}{suffix}\n"
             f"   RSI: {latest.rsi:.2f}\n"
-            f"   Signal: {signal}")
+            f"   Signal:\n{formatted_signal}")
 
 # --- ANALYZE ASSET ---
 def analyze_asset(symbol, df, is_crypto, prev_signals, new_signals, new_alerts):
@@ -261,13 +277,7 @@ def analyze_asset(symbol, df, is_crypto, prev_signals, new_signals, new_alerts):
     new_signal_raw = generate_signal(df, latest, prev, rsi_desc)
 
     old_signal = prev_signals.get(symbol)
-    signal_line, changes_line = diff_signal_parts(old_signal, new_signal_raw)
-
-    # Always build full signal (with or without changes)
-    if changes_line:
-        full_signal = f"{signal_line}\n   {changes_line}"
-    else:
-        full_signal = signal_line
+    full_signal = diff_signal_parts(old_signal, new_signal_raw)
 
     # Always store the raw signal for next time (not the diffed one)
     new_signals[symbol] = new_signal_raw
