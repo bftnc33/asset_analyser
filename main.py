@@ -215,7 +215,7 @@ def diff_signal_parts(old_signal, new_signal):
 # --- FORMAT OUTPUT ---
 def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes=None):
     # Determine currency and formatting
-    if symbol.endswith(".L"):
+    if symbol.endswith("SGLN.L"):
         currency = "£"
         suffix = ""
         # Convert pence to pounds by dividing by 100
@@ -224,6 +224,14 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
         sma7 = latest.sma7 / 100
         sma30 = latest.sma30 / 100
         price_fmt = "{:,.4f}" if current_close < 1 else "{:,.2f}"
+    elif symbol.endswith(".L"):
+        currency = "£"
+        suffix = ""
+        price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
+        current_close = latest.close
+        previous_close = previous.close
+        sma7 = latest.sma7 / 100
+        sma30 = latest.sma30 / 100
     elif is_crypto:
         # Crypto in GBP
         currency = "£"
