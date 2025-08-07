@@ -254,23 +254,81 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     price_change = ((current_close - previous_close) / previous_close) * 100
     change_color = "🟢" if price_change > 0 else "🔴" if price_change < 0 else "⚪️"
     
-    # Clean the signal first - remove any existing changes line
-    clean_signal = signal
-    if "↪️ Changes:" in signal:
-        clean_signal = signal.split("↪️ Changes:")[0].strip()
+    # Extract key changes only
+    key_changes = []
     
-    # Split signal elements and put each on a new line
-    signal_parts = clean_signal.split(' | ')
-    formatted_signal = '\n'.join([f"     {part.strip()}" for part in signal_parts if part.strip()])
+    # Parse the signal to identify changes
+    signal_parts = signal.split(' | ')
     
-    return (f"\n🔹 {symbol} ({'Crypto' if is_crypto else 'Stock'}):\n"
-            f"   Current Price: {currency}{price_fmt.format(current_close)}{suffix}\n"
-            f"   Yesterday's Close: {currency}{price_fmt.format(previous_close)}{suffix}\n"
-            f"   Price Change: {change_color} {price_change:+.2f}%\n"
-            f"   SMA7: {currency}{price_fmt.format(sma7)}{suffix}\n"
-            f"   SMA30: {currency}{price_fmt.format(sma30)}{suffix}\n"
-            f"   RSI: {latest.rsi:.2f}\n"
-            f"   Signal:\n{formatted_signal}")
+    for part in signal_parts:
+        part = part.strip()
+        if "(was:" in part:
+            # Extract the change
+            if "ABOVE SMA7" in part and "was: 🔻 Price BELOW SMA7" in part:
+                key_changes.append("✅ Broke ABOVE SMA7")
+            elif "BELOW SMA7" in part and "was: ✅ Price ABOVE SMA7" in part:
+                key_changes.append("🔻 Broke BELOW SMA7")
+            elif "ABOVE SMA30" in part and "was: 🔻 Price BELOW SMA30" in part:
+                key_changes.append("✅ Broke ABOVE SMA30")
+            elif "BELOW SMA30" in part and "was: ✅ Price ABOVE SMA30" in part:
+                key_changes.append("🔻 Broke BELOW SMA30")
+            elif "Bull Flag" in part and "was: 📉 Bear Flag" in part:
+                key_changes.append("📈 Turned BULLISH")
+            elif "Bear Flag" in part and "was: 📈 Bull Flag" in part:
+                key_changes.append("📉 Turned BEARISH")
+            elif "Rising" in part and "was: 🔽 Falling" in part:
+                key_changes.append("🔼 Momentum UP")
+            elif "Falling" in part and "was: 🔼 Rising" in part:
+                key_changes.append("🔽 Momentum DOWN")
+            elif "Golden Cross" in part:
+                key_changes.append("✨ Golden Cross")
+            elif "Death Cross" in part:
+                key_changes.append("⚠️ Death Cross")
+            elif "RSI" in part:
+                # Handle RSI changes
+                if "OVERSOLD" in part:
+                    key_changes.append(f"🟢 RSI OVERSOLD ({latest.rsi:.0f})")
+                elif "OVERBOUGHT" in part:
+                    key_changes.append(f"🔴 RSI OVERBOUGHT ({latest.rsi:.0f})")
+                elif "Near Overbought" in part:
+                    key_changes.append(f"🟡 RSI heating up ({latest.rsi:.0f}→overbought)")
+                elif "Near Oversold" in part:
+                    key_changes.append(f"🟡 RSI cooling ({latest.rsi:.0f}→oversold)")
+                elif "Neutral" in part and "was:" in part:
+                    if latest.rsi > 55:
+                        key_changes.append(f"⚪️ RSI normalizing ({latest.rsi:.0f})")
+    
+    # Add RSI momentum if present
+    for part in signal_parts:
+        if "RSI ↗️ Accelerating" in part:
+            if not any("RSI" in change for change in key_changes):
+                key_changes.append(f"📈 RSI accelerating ({latest.rsi:.0f}↗️)")
+        elif "RSI ↘️ Decelerating" in part:
+            if not any("RSI" in change for change in key_changes):
+                key_changes.append(f"📉 RSI decelerating ({latest.rsi:.0f}↘️)")
+    
+    # Add volume spikes
+    for part in signal_parts:
+        if "Volume Spike: 🚨 Severe" in part:
+            key_changes.append("📊 VOLUME SURGE")
+        elif "Volume Spike: ⚠️ Moderate" in part:
+            key_changes.append("📊 Volume spike")
+    
+    # Build the compact output
+    main_line = f"🔹 {symbol}: {currency}{price_fmt.format(current_close)}{suffix} ({change_color}{price_change:+.2f}%)"
+    
+    if key_changes:
+        changes_line = f"   {' | '.join(key_changes)}"
+        return f"{main_line}\n{changes_line}"
+    else:
+        # No changes, show basic status
+        flag = "📈 Bull" if any("Bull Flag" in part for part in signal_parts) else "📉 Bear"
+        above_sma7 = "✅SMA7" if any("Price ABOVE SMA7" in part for part in signal_parts) else "🔻SMA7"
+        above_sma30 = "✅SMA30" if any("Price ABOVE SMA30" in part for part in signal_parts) else "🔻SMA30"
+        rsi_status = f"RSI:{latest.rsi:.0f}"
+        
+        status_line = f"   {flag} | {above_sma7} | {above_sma30} | {rsi_status}"
+        return f"{main_line}\n{status_line}"
 
 # --- ANALYZE ASSET ---
 def analyze_asset(symbol, df, is_crypto, prev_signals, new_signals, new_alerts):
