@@ -117,6 +117,13 @@ def add_indicators(df):
     df['sma30'] = ta.trend.sma_indicator(df['close'], window=30)
     df['rsi'] = ta.momentum.rsi(df['close'], window=14)
     df['vol_avg'] = df['volume'].ewm(span=20, adjust=False).mean()
+    
+    # Add MACD
+    macd = ta.trend.MACD(df['close'])
+    df['macd'] = macd.macd()
+    df['macd_signal'] = macd.macd_signal()
+    df['macd_histogram'] = macd.macd_diff()
+    
     return df
 
 # --- RSI DESCRIPTION ---
@@ -131,6 +138,35 @@ def describe_rsi(rsi_value):
         return "🟡 RSI Near Overbought (Monitor)"
     else:
         return "🔴 RSI OVERBOUGHT (Consider Selling)"
+
+# --- MACD SIGNAL DETECTION ---
+def get_macd_signal(df, latest_idx):
+    if latest_idx < 1:
+        return ""
+    
+    current = df.iloc[latest_idx]
+    previous = df.iloc[latest_idx - 1]
+    
+    # Bullish crossover: MACD crosses above signal line
+    if (previous.macd <= previous.macd_signal and 
+        current.macd > current.macd_signal):
+        return "🚀 MACD Bullish Cross"
+    
+    # Bearish crossover: MACD crosses below signal line
+    elif (previous.macd >= previous.macd_signal and 
+          current.macd < current.macd_signal):
+        return "⚠️ MACD Bearish Cross"
+    
+    # Strong momentum signals
+    elif current.macd > current.macd_signal:
+        # Check histogram for momentum strength
+        if current.macd_histogram > 0 and current.macd_histogram > previous.macd_histogram * 1.5:
+            return "🔥 MACD Strong Bull"
+    elif current.macd < current.macd_signal:
+        if current.macd_histogram < 0 and current.macd_histogram < previous.macd_histogram * 1.5:
+            return "🔻 MACD Strong Bear"
+    
+    return ""
 
 # --- SIGNAL GENERATION ---
 def generate_signal(df, latest, prev, rsi_desc):
@@ -148,6 +184,9 @@ def generate_signal(df, latest, prev, rsi_desc):
     elif prev_sma7 > prev_sma30 and sma7 < sma30:
         crossover = "⚠️ Death Cross (SMA7 ↓ SMA30)"
 
+    # Get MACD signal
+    macd_signal = get_macd_signal(df, len(df) - 1)
+
     spike_ratio = latest.volume / latest.vol_avg if latest.vol_avg else 0
     volume_spike = ""
     if spike_ratio > 2:
@@ -163,9 +202,11 @@ def generate_signal(df, latest, prev, rsi_desc):
         direction = "↗️ Accelerating" if rsi_change > 0 else "↘️ Decelerating"
         rsi_momentum = f"RSI {direction}"
 
-    parts = [flag, trend, price_vs_sma7, price_vs_sma30]  # Added price_vs_sma30
+    parts = [flag, trend, price_vs_sma7, price_vs_sma30]
     if crossover:
         parts.append(crossover)
+    if macd_signal:  # Add MACD signal if present
+        parts.append(macd_signal)
     if volume_spike:
         parts.append(volume_spike)
     parts.append(rsi_desc)
@@ -204,7 +245,8 @@ def diff_signal_parts(old_signal, new_signal):
                (('Rising' in new_item or 'Falling' in new_item) and ('Rising' in old_item or 'Falling' in old_item)) or \
                (('ABOVE SMA7' in new_item or 'BELOW SMA7' in new_item) and ('ABOVE SMA7' in old_item or 'BELOW SMA7' in old_item)) or \
                (('ABOVE SMA30' in new_item or 'BELOW SMA30' in new_item) and ('ABOVE SMA30' in old_item or 'BELOW SMA30' in old_item)) or \
-               (('RSI' in new_item and 'RSI' in old_item)):
+               (('RSI' in new_item and 'RSI' in old_item)) or \
+               (('MACD' in new_item and 'MACD' in old_item)):  # Added MACD change detection
                 enhanced_part = f"{new_item} (was: {old_item})"
                 break
         
@@ -284,6 +326,10 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
                 key_changes.append("✨ Golden Cross")
             elif "Death Cross" in part:
                 key_changes.append("⚠️ Death Cross")
+            elif "MACD Bullish Cross" in part:
+                key_changes.append("🚀 MACD Bull Cross")
+            elif "MACD Bearish Cross" in part:
+                key_changes.append("⚠️ MACD Bear Cross")
             elif "RSI" in part:
                 # Handle RSI changes
                 if "OVERSOLD" in part:
@@ -297,6 +343,17 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
                 elif "Neutral" in part and "was:" in part:
                     if latest.rsi > 55:
                         key_changes.append(f"⚪️ RSI normalizing ({latest.rsi:.0f})")
+    
+    # Add standalone MACD signals (not changes)
+    for part in signal_parts:
+        if "🚀 MACD Bullish Cross" in part and not any("MACD" in change for change in key_changes):
+            key_changes.append("🚀 MACD Bull Cross")
+        elif "⚠️ MACD Bearish Cross" in part and not any("MACD" in change for change in key_changes):
+            key_changes.append("⚠️ MACD Bear Cross")
+        elif "🔥 MACD Strong Bull" in part:
+            key_changes.append("🔥 MACD Momentum")
+        elif "🔻 MACD Strong Bear" in part:
+            key_changes.append("🔻 MACD Weakness")
     
     # Add RSI momentum if present
     for part in signal_parts:
@@ -325,9 +382,29 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
         flag = "📈 Bull" if any("Bull Flag" in part for part in signal_parts) else "📉 Bear"
         above_sma7 = "✅SMA7" if any("Price ABOVE SMA7" in part for part in signal_parts) else "🔻SMA7"
         above_sma30 = "✅SMA30" if any("Price ABOVE SMA30" in part for part in signal_parts) else "🔻SMA30"
+        
+        # Add MACD status to basic display
+        macd_status = ""
+        if any("MACD Bullish Cross" in part or "MACD Strong Bull" in part for part in signal_parts):
+            macd_status = "🚀MACD"
+        elif any("MACD Bearish Cross" in part or "MACD Strong Bear" in part for part in signal_parts):
+            macd_status = "⚠️MACD"
+        else:
+            # Check if MACD is above or below signal line
+            if hasattr(latest, 'macd') and hasattr(latest, 'macd_signal'):
+                if latest.macd > latest.macd_signal:
+                    macd_status = "✅MACD"
+                else:
+                    macd_status = "🔻MACD"
+        
         rsi_status = f"RSI:{latest.rsi:.0f}"
         
-        status_line = f"   {flag} | {above_sma7} | {above_sma30} | {rsi_status}"
+        status_parts = [flag, above_sma7, above_sma30]
+        if macd_status:
+            status_parts.append(macd_status)
+        status_parts.append(rsi_status)
+        
+        status_line = f"   {' | '.join(status_parts)}"
         return f"{main_line}\n{status_line}"
 
 # --- ANALYZE ASSET ---
