@@ -230,8 +230,8 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
         price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
         current_close = latest.close
         previous_close = previous.close
-        sma7 = latest.sma7 / 100
-        sma30 = latest.sma30 / 100
+        sma7 = latest.sma7
+        sma30 = latest.sma30
     elif is_crypto:
         # Crypto in GBP
         currency = "£"
