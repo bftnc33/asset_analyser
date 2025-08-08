@@ -174,7 +174,7 @@ def generate_signal(df, latest, prev, rsi_desc):
     prev_sma7, prev_sma30 = prev.sma7, prev.sma30
 
     flag = "📈 Bull Flag" if sma7 > sma30 else "📉 Bear Flag"
-    trend = "🔼 Rising" if latest.close > prev.close else "🔽 Falling"
+    trend = "🔼 Daily UP" if latest.close > prev.close else "🔽 Daily DOWN"
     price_vs_sma7 = "✅ Price ABOVE SMA7" if latest.close > sma7 else "🔻 Price BELOW SMA7" 
     price_vs_sma30 = "✅ Price ABOVE SMA30" if latest.close > sma30 else "🔻 Price BELOW SMA30"
 
@@ -242,7 +242,7 @@ def diff_signal_parts(old_signal, new_signal):
         for old_item in removed:
             # Check for similar categories that should show "was:" format
             if (('Bull Flag' in new_item or 'Bear Flag' in new_item) and ('Bull Flag' in old_item or 'Bear Flag' in old_item)) or \
-               (('Rising' in new_item or 'Falling' in new_item) and ('Rising' in old_item or 'Falling' in old_item)) or \
+               (('Daily UP' in new_item or 'Daily DOWN' in new_item) and ('Daily UP' in old_item or 'Daily DOWN' in old_item)) or \
                (('ABOVE SMA7' in new_item or 'BELOW SMA7' in new_item) and ('ABOVE SMA7' in old_item or 'BELOW SMA7' in old_item)) or \
                (('ABOVE SMA30' in new_item or 'BELOW SMA30' in new_item) and ('ABOVE SMA30' in old_item or 'BELOW SMA30' in old_item)) or \
                (('RSI' in new_item and 'RSI' in old_item)) or \
@@ -296,11 +296,47 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     price_change = ((current_close - previous_close) / previous_close) * 100
     change_color = "🟢" if price_change > 0 else "🔴" if price_change < 0 else "⚪️"
     
-    # Extract key changes only
-    key_changes = []
-    
-    # Parse the signal to identify changes
+    # Parse the signal to build current status
     signal_parts = signal.split(' | ')
+    
+    # Build compact status line (Option 1 format)
+    flag = "📈 Bull" if any("Bull Flag" in part for part in signal_parts) else "📉 Bear"
+    above_sma7 = "✅" if any("Price ABOVE SMA7" in part for part in signal_parts) else "🔻"
+    above_sma30 = "✅" if any("Price ABOVE SMA30" in part for part in signal_parts) else "🔻"
+    
+    # Add MACD status
+    macd_status = ""
+    if any("MACD Bullish Cross" in part or "MACD Strong Bull" in part for part in signal_parts):
+        macd_status = "🚀"
+    elif any("MACD Bearish Cross" in part or "MACD Strong Bear" in part for part in signal_parts):
+        macd_status = "⚠️"
+    else:
+        # Check if MACD is above or below signal line
+        if hasattr(latest, 'macd') and hasattr(latest, 'macd_signal'):
+            if latest.macd > latest.macd_signal:
+                macd_status = "✅"
+            else:
+                macd_status = "🔻"
+    
+    # RSI with momentum arrow if accelerating
+    rsi_arrow = ""
+    if any("RSI ↗️ Accelerating" in part for part in signal_parts):
+        rsi_arrow = "↗️"
+    elif any("RSI ↘️ Decelerating" in part for part in signal_parts):
+        rsi_arrow = "↘️"
+    
+    rsi_status = f"RSI:{latest.rsi:.0f}{rsi_arrow}"
+    
+    # Build main status line
+    status_parts = [flag, f"{above_sma7}SMA7", f"{above_sma30}SMA30"]
+    if macd_status:
+        status_parts.append(f"{macd_status}MACD")
+    status_parts.append(rsi_status)
+    
+    main_line = f"🔹 {symbol}: {currency}{price_fmt.format(current_close)}{suffix} {change_color}{price_change:+.1f}% | {' | '.join(status_parts)}"
+    
+    # Extract key changes for second line
+    key_changes = []
     
     for part in signal_parts:
         part = part.strip()
@@ -318,10 +354,10 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
                 key_changes.append("📈 Turned BULLISH")
             elif "Bear Flag" in part and "was: 📈 Bull Flag" in part:
                 key_changes.append("📉 Turned BEARISH")
-            elif "Rising" in part and "was: 🔽 Falling" in part:
-                key_changes.append("🔼 Momentum UP")
-            elif "Falling" in part and "was: 🔼 Rising" in part:
-                key_changes.append("🔽 Momentum DOWN")
+            elif "Daily UP" in part and "was: 🔽 Daily DOWN" in part:
+                key_changes.append("🔼 Daily UP")
+            elif "Daily DOWN" in part and "was: 🔼 Daily UP" in part:
+                key_changes.append("🔽 Daily DOWN")
             elif "Golden Cross" in part:
                 key_changes.append("✨ Golden Cross")
             elif "Death Cross" in part:
@@ -355,13 +391,13 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
         elif "🔻 MACD Strong Bear" in part:
             key_changes.append("🔻 MACD Weakness")
     
-    # Add RSI momentum if present
+    # Add RSI momentum if present (and not already in arrow)
     for part in signal_parts:
         if "RSI ↗️ Accelerating" in part:
-            if not any("RSI" in change for change in key_changes):
+            if not any("RSI" in change for change in key_changes) and not rsi_arrow:
                 key_changes.append(f"📈 RSI accelerating ({latest.rsi:.0f}↗️)")
         elif "RSI ↘️ Decelerating" in part:
-            if not any("RSI" in change for change in key_changes):
+            if not any("RSI" in change for change in key_changes) and not rsi_arrow:
                 key_changes.append(f"📉 RSI decelerating ({latest.rsi:.0f}↘️)")
     
     # Add volume spikes
@@ -370,42 +406,15 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
             key_changes.append("📊 VOLUME SURGE")
         elif "Volume Spike: ⚠️ Moderate" in part:
             key_changes.append("📊 Volume spike")
+        elif "Volume Spike: ⚪️ Mild" in part:
+            key_changes.append("📊 Volume↑")
     
-    # Build the compact output
-    main_line = f"🔹 {symbol}: {currency}{price_fmt.format(current_close)}{suffix} ({change_color}{price_change:+.2f}%)"
-    
+    # Return format: always show status line, add changes if any
     if key_changes:
-        changes_line = f"   {' | '.join(key_changes)}"
+        changes_line = f"   📍 {' | '.join(key_changes)}"
         return f"{main_line}\n{changes_line}"
     else:
-        # No changes, show basic status
-        flag = "📈 Bull" if any("Bull Flag" in part for part in signal_parts) else "📉 Bear"
-        above_sma7 = "✅SMA7" if any("Price ABOVE SMA7" in part for part in signal_parts) else "🔻SMA7"
-        above_sma30 = "✅SMA30" if any("Price ABOVE SMA30" in part for part in signal_parts) else "🔻SMA30"
-        
-        # Add MACD status to basic display
-        macd_status = ""
-        if any("MACD Bullish Cross" in part or "MACD Strong Bull" in part for part in signal_parts):
-            macd_status = "🚀MACD"
-        elif any("MACD Bearish Cross" in part or "MACD Strong Bear" in part for part in signal_parts):
-            macd_status = "⚠️MACD"
-        else:
-            # Check if MACD is above or below signal line
-            if hasattr(latest, 'macd') and hasattr(latest, 'macd_signal'):
-                if latest.macd > latest.macd_signal:
-                    macd_status = "✅MACD"
-                else:
-                    macd_status = "🔻MACD"
-        
-        rsi_status = f"RSI:{latest.rsi:.0f}"
-        
-        status_parts = [flag, above_sma7, above_sma30]
-        if macd_status:
-            status_parts.append(macd_status)
-        status_parts.append(rsi_status)
-        
-        status_line = f"   {' | '.join(status_parts)}"
-        return f"{main_line}\n{status_line}"
+        return main_line
 
 # --- ANALYZE ASSET ---
 def analyze_asset(symbol, df, is_crypto, prev_signals, new_signals, new_alerts):
