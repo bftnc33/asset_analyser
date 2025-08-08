@@ -229,7 +229,6 @@ def diff_signal_parts(old_signal, new_signal):
     new_items_list = extract_items(new_signal)
     new_items_set = set(new_items_list)
 
-    added = new_items_set - old_items
     removed = old_items - new_items_set
 
     # Build signal with (was: old_value) for changed items
@@ -263,8 +262,6 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
         # Convert pence to pounds by dividing by 100
         current_close = latest.close / 100
         previous_close = previous.close / 100
-        sma7 = latest.sma7 / 100
-        sma30 = latest.sma30 / 100
         price_fmt = "{:,.4f}" if current_close < 1 else "{:,.2f}"
     elif symbol.endswith(".L"):
         currency = "£"
@@ -272,8 +269,6 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
         price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
         current_close = latest.close
         previous_close = previous.close
-        sma7 = latest.sma7
-        sma30 = latest.sma30
     elif is_crypto:
         # Crypto in GBP
         currency = "£"
@@ -281,8 +276,6 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
         price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
         current_close = latest.close
         previous_close = previous.close
-        sma7 = latest.sma7
-        sma30 = latest.sma30
     else:
         # US stocks in USD
         currency = "$"
@@ -290,8 +283,6 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
         price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
         current_close = latest.close
         previous_close = previous.close
-        sma7 = latest.sma7
-        sma30 = latest.sma30
     
     price_change = ((current_close - previous_close) / previous_close) * 100
     change_color = "🟢" if price_change > 0 else "🔴" if price_change < 0 else "⚪️"
