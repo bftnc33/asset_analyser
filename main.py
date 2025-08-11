@@ -126,6 +126,40 @@ def add_indicators(df):
     
     return df
 
+# --- VOLUME COLOR DETECTION ---
+def get_volume_color(df, latest_idx):
+    """Determine if volume candle is green (buying) or red (selling)"""
+    if latest_idx < 1:
+        return "neutral"
+    
+    current = df.iloc[latest_idx]
+    previous = df.iloc[latest_idx - 1]
+    
+    # Green volume = price up from previous close
+    # Red volume = price down from previous close
+    if current.close > previous.close:
+        return "green"
+    elif current.close < previous.close:
+        return "red"
+    else:
+        return "neutral"
+
+# --- SMART MONEY CONTEXT ---
+def get_smart_money_context(latest, volume_color, spike_ratio, rsi_value):
+    """Provide smart money interpretation of volume/price action"""
+    price_change_pct = ((latest.close - latest.open) / latest.open) * 100
+    
+    if volume_color == "red" and abs(price_change_pct) < 0.5 and spike_ratio > 1.5:
+        return "🔍 Smart Money: Distribution (Heavy selling, minimal price impact)"
+    elif volume_color == "green" and abs(price_change_pct) < 0.5 and spike_ratio > 1.5:
+        return "🔍 Smart Money: Accumulation (Heavy buying, controlled price)"
+    elif volume_color == "red" and price_change_pct < -2 and rsi_value < 40:
+        return "🔍 Smart Money: Capitulation absorbed"
+    elif volume_color == "green" and price_change_pct > 2 and rsi_value > 60:
+        return "🔍 Smart Money: FOMO buying (Caution)"
+    
+    return ""
+
 # --- RSI DESCRIPTION ---
 def describe_rsi(rsi_value):
     if rsi_value < 30:
@@ -230,14 +264,35 @@ def generate_signal(df, latest, prev, rsi_desc):
     # Get MACD signal
     macd_signal = get_macd_signal(df, len(df) - 1)
 
+    # Enhanced Volume Analysis with Color
     spike_ratio = latest.volume / latest.vol_avg if latest.vol_avg else 0
+    volume_color = get_volume_color(df, len(df) - 1)
+    
     volume_spike = ""
     if spike_ratio > 2:
-        volume_spike = "📊 Volume Spike: 🚨 Severe"
+        if volume_color == "green":
+            volume_spike = "📊🟢 Volume Spike: 🚨 BUYING SURGE"
+        elif volume_color == "red":
+            volume_spike = "📊🔴 Volume Spike: 🚨 SELLING PRESSURE"
+        else:
+            volume_spike = "📊⚪️ Volume Spike: 🚨 Severe (Neutral)"
     elif spike_ratio > 1.5:
-        volume_spike = "📊 Volume Spike: ⚠️ Moderate"
+        if volume_color == "green":
+            volume_spike = "📊🟢 Volume Spike: ⚠️ BUYING Interest"
+        elif volume_color == "red":
+            volume_spike = "📊🔴 Volume Spike: ⚠️ SELLING Pressure"
+        else:
+            volume_spike = "📊⚪️ Volume Spike: ⚠️ Moderate"
     elif spike_ratio > 1.2:
-        volume_spike = "📊 Volume Spike: ⚪️ Mild"
+        if volume_color == "green":
+            volume_spike = "📊🟢 Volume↑ (Buying)"
+        elif volume_color == "red":
+            volume_spike = "📊🔴 Volume↑ (Selling)"
+        else:
+            volume_spike = "📊⚪️ Volume↑"
+
+    # Add smart money context
+    smart_money_context = get_smart_money_context(latest, volume_color, spike_ratio, latest.rsi)
 
     rsi_change = latest.rsi - prev.rsi
     rsi_momentum = ""
@@ -255,6 +310,8 @@ def generate_signal(df, latest, prev, rsi_desc):
     parts.append(rsi_desc)
     if rsi_momentum:
         parts.append(rsi_momentum)
+    if smart_money_context:
+        parts.append(smart_money_context)
 
     return " | ".join(parts)
 
@@ -390,7 +447,7 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
         status_parts.append(f"{macd_status}MACD")
     status_parts.append(rsi_status)
     
-    main_line = f"🔹 {symbol}: {currency}{price_fmt.format(current_close)}{suffix} {change_color}{price_change:+.1f}% | {' | '.join(status_parts)}"
+    main_line = f"{symbol}: {currency}{price_fmt.format(current_close)}{suffix} {change_color}{price_change:+.1f}% | {' | '.join(status_parts)}"
     
     # Extract key changes for second line
     key_changes = []
@@ -465,18 +522,34 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
             if not any("RSI" in change for change in key_changes) and not rsi_arrow:
                 key_changes.append(f"📉 RSI decelerating ({latest.rsi:.0f}↘️)")
     
-    # Add volume spikes
+    # Enhanced volume spikes with color
     for part in current_parts:
-        if "Volume Spike: 🚨 Severe" in part:
+        if "🟢" in part and "BUYING SURGE" in part:
+            key_changes.append("🟢📊 BUYING SURGE")
+        elif "🔴" in part and "SELLING PRESSURE" in part:
+            key_changes.append("🔴📊 SELLING PRESSURE") 
+        elif "🟢" in part and "BUYING Interest" in part:
+            key_changes.append("🟢📊 Buying Interest")
+        elif "🔴" in part and "SELLING Pressure" in part:
+            key_changes.append("🔴📊 Selling Pressure")
+        elif "🟢" in part and "Volume↑ (Buying)" in part:
+            key_changes.append("🟢📊 Volume↑")
+        elif "🔴" in part and "Volume↑ (Selling)" in part:
+            key_changes.append("🔴📊 Volume↑")
+        elif "Volume Spike: 🚨 Severe" in part:  # Keep existing neutral logic
             key_changes.append("📊 VOLUME SURGE")
-        elif "Volume Spike: ⚠️ Moderate" in part:
-            key_changes.append("📊 Volume spike")
-        elif "Volume Spike: ⚪️ Mild" in part:
-            key_changes.append("📊 Volume↑")
+        elif "Smart Money: Distribution" in part:
+            key_changes.append("🔍 Distribution")
+        elif "Smart Money: Accumulation" in part:
+            key_changes.append("🔍 Accumulation")
+        elif "Smart Money: Capitulation absorbed" in part:
+            key_changes.append("🔍 Capitulation absorbed")
+        elif "Smart Money: FOMO buying" in part:
+            key_changes.append("🔍 FOMO buying")
     
     # Return format: always show status line, add changes if any
     if key_changes:
-        changes_line = f"   📍 {' | '.join(key_changes)}"
+        changes_line = f"   {' | '.join(key_changes)}"
         return f"{main_line}\n{changes_line}"
     else:
         return main_line
