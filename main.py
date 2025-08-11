@@ -290,16 +290,25 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     # Parse the signal to build current status
     signal_parts = signal.split(' | ')
     
-    # Build compact status line (Option 1 format)
-    flag = "📈 Bull" if any("Bull Flag" in part for part in signal_parts) else "📉 Bear"
-    above_sma7 = "✅" if any("Price ABOVE SMA7" in part for part in signal_parts) else "🔻"
-    above_sma30 = "✅" if any("Price ABOVE SMA30" in part for part in signal_parts) else "🔻"
+    # Extract only the current status (before any "was:" text)
+    def extract_current_status(part):
+        """Extract the current status from a signal part, ignoring (was: ...) sections"""
+        if "(was:" in part:
+            return part.split("(was:")[0].strip()
+        return part.strip()
+    
+    # Build compact status line using only current status
+    current_parts = [extract_current_status(part) for part in signal_parts]
+    
+    flag = "📈 Bull" if any("Bull Flag" in part for part in current_parts) else "📉 Bear"
+    above_sma7 = "✅" if any("Price ABOVE SMA7" in part for part in current_parts) else "🔻"
+    above_sma30 = "✅" if any("Price ABOVE SMA30" in part for part in current_parts) else "🔻"
     
     # Add MACD status
     macd_status = ""
-    if any("MACD Bullish Cross" in part or "MACD Strong Bull" in part for part in signal_parts):
+    if any("MACD Bullish Cross" in part or "MACD Strong Bull" in part for part in current_parts):
         macd_status = "🚀"
-    elif any("MACD Bearish Cross" in part or "MACD Strong Bear" in part for part in signal_parts):
+    elif any("MACD Bearish Cross" in part or "MACD Strong Bear" in part for part in current_parts):
         macd_status = "⚠️"
     else:
         # Check if MACD is above or below signal line
@@ -311,9 +320,9 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     
     # RSI with momentum arrow if accelerating
     rsi_arrow = ""
-    if any("RSI ↗️ Accelerating" in part for part in signal_parts):
+    if any("RSI ↗️ Accelerating" in part for part in current_parts):
         rsi_arrow = "↗️"
-    elif any("RSI ↘️ Decelerating" in part for part in signal_parts):
+    elif any("RSI ↘️ Decelerating" in part for part in current_parts):
         rsi_arrow = "↘️"
     
     rsi_status = f"RSI:{latest.rsi:.0f}{rsi_arrow}"
@@ -326,7 +335,7 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     
     main_line = f"🔹 {symbol}: {currency}{price_fmt.format(current_close)}{suffix} {change_color}{price_change:+.1f}% | {' | '.join(status_parts)}"
     
-    # Extract key changes for second line
+    # Extract key changes for second line (unchanged - this part works correctly)
     key_changes = []
     
     for part in signal_parts:
@@ -372,7 +381,7 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
                         key_changes.append(f"⚪️ RSI normalizing ({latest.rsi:.0f})")
     
     # Add standalone MACD signals (not changes)
-    for part in signal_parts:
+    for part in current_parts:  # FIXED: Use current_parts here too
         if "🚀 MACD Bullish Cross" in part and not any("MACD" in change for change in key_changes):
             key_changes.append("🚀 MACD Bull Cross")
         elif "⚠️ MACD Bearish Cross" in part and not any("MACD" in change for change in key_changes):
@@ -383,7 +392,7 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
             key_changes.append("🔻 MACD Weakness")
     
     # Add RSI momentum if present (and not already in arrow)
-    for part in signal_parts:
+    for part in current_parts:  # FIXED: Use current_parts here too
         if "RSI ↗️ Accelerating" in part:
             if not any("RSI" in change for change in key_changes) and not rsi_arrow:
                 key_changes.append(f"📈 RSI accelerating ({latest.rsi:.0f}↗️)")
@@ -392,7 +401,7 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
                 key_changes.append(f"📉 RSI decelerating ({latest.rsi:.0f}↘️)")
     
     # Add volume spikes
-    for part in signal_parts:
+    for part in current_parts:  # FIXED: Use current_parts here too
         if "Volume Spike: 🚨 Severe" in part:
             key_changes.append("📊 VOLUME SURGE")
         elif "Volume Spike: ⚠️ Moderate" in part:
