@@ -27,7 +27,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SIGNAL_FILE = "signals.json"
 crypto_exchange = ccxt.kraken()
 timeframe = '1d'
-limit = 100
+limit = 300
 
 # --- LOAD SYMBOLS ---
 def load_symbols(file_path="symbols.json"):
@@ -95,7 +95,7 @@ def fetch_crypto_data(symbol):
     return df
 
 def fetch_stock_data(ticker):
-    df = yf.download(ticker, period='100d', interval='1d', progress=False, auto_adjust=True)
+    df = yf.download(ticker, period='300d', interval='1d', progress=False, auto_adjust=True)
     if df.empty:
         raise ValueError("No data fetched")
     if isinstance(df.columns, pd.MultiIndex):
@@ -115,6 +115,7 @@ def fetch_stock_data(ticker):
 def add_indicators(df):
     df['sma7'] = ta.trend.sma_indicator(df['close'], window=7)
     df['sma30'] = ta.trend.sma_indicator(df['close'], window=30)
+    df['sma200'] = ta.trend.sma_indicator(df['close'], window=200)  # Add SMA200
     df['rsi'] = ta.momentum.rsi(df['close'], window=14)
     df['vol_avg'] = df['volume'].ewm(span=20, adjust=False).mean()
     
@@ -145,18 +146,31 @@ def get_volume_color(df, latest_idx):
         return "neutral"
 
 # --- SMART MONEY CONTEXT ---
-def get_smart_money_context(latest, volume_color, spike_ratio, rsi_value):
-    """Provide smart money interpretation of volume/price action"""
+def get_smart_money_context(latest, volume_color, spike_ratio, rsi_value, sma200_distance):
+    """Enhanced smart money interpretation including SMA200 context"""
     price_change_pct = ((latest.close - latest.open) / latest.open) * 100
     
+    # Enhanced logic with SMA200 context
     if volume_color == "red" and abs(price_change_pct) < 0.5 and spike_ratio > 1.5:
-        return "🔍 Smart Money: Distribution (Heavy selling, minimal price impact)"
+        if sma200_distance > 10:
+            return "🔍 Smart Money: Distribution (Extended above 200MA)"
+        else:
+            return "🔍 Smart Money: Distribution (Heavy selling, minimal price impact)"
     elif volume_color == "green" and abs(price_change_pct) < 0.5 and spike_ratio > 1.5:
-        return "🔍 Smart Money: Accumulation (Heavy buying, controlled price)"
+        if sma200_distance < -10:
+            return "🔍 Smart Money: Accumulation (Oversold vs 200MA)"
+        else:
+            return "🔍 Smart Money: Accumulation (Heavy buying, controlled price)"
     elif volume_color == "red" and price_change_pct < -2 and rsi_value < 40:
-        return "🔍 Smart Money: Capitulation absorbed"
+        if abs(sma200_distance) < 5:
+            return "🔍 Smart Money: 200MA support test"
+        else:
+            return "🔍 Smart Money: Capitulation absorbed"
     elif volume_color == "green" and price_change_pct > 2 and rsi_value > 60:
-        return "🔍 Smart Money: FOMO buying (Caution)"
+        if sma200_distance > 15:
+            return "🔍 Smart Money: FOMO buying (Extended from 200MA)"
+        else:
+            return "🔍 Smart Money: FOMO buying (Caution)"
     
     return ""
 
@@ -247,19 +261,50 @@ def get_macd_signal(df, latest_idx):
 
 # --- SIGNAL GENERATION ---
 def generate_signal(df, latest, prev, rsi_desc):
-    sma7, sma30 = latest.sma7, latest.sma30
-    prev_sma7, prev_sma30 = prev.sma7, prev.sma30
+    sma7, sma30, sma200 = latest.sma7, latest.sma30, latest.sma200
+    prev_sma7, prev_sma30, prev_sma200 = prev.sma7, prev.sma30, prev.sma200
 
-    flag = "📈 Bull Flag" if sma7 > sma30 else "📉 Bear Flag"
+    # Enhanced flag logic with SMA200 context
+    if sma7 > sma30:
+        if latest.close > sma200:
+            flag = "📈 Bull Flag (Above 200MA)"
+        else:
+            flag = "📈 Bull Flag (Below 200MA - Counter-trend)"
+    else:
+        if latest.close > sma200:
+            flag = "📉 Bear Flag (Above 200MA - Counter-trend)"
+        else:
+            flag = "📉 Bear Flag (Below 200MA)"
+
     trend = "🔼 Daily UP" if latest.close > prev.close else "🔽 Daily DOWN"
     price_vs_sma7 = "✅ Price ABOVE SMA7" if latest.close > sma7 else "🔻 Price BELOW SMA7" 
     price_vs_sma30 = "✅ Price ABOVE SMA30" if latest.close > sma30 else "🔻 Price BELOW SMA30"
+    price_vs_sma200 = "✅ Price ABOVE SMA200" if latest.close > sma200 else "🔻 Price BELOW SMA200"
 
+    # Enhanced crossover detection including SMA200
     crossover = ""
     if prev_sma7 < prev_sma30 and sma7 > sma30:
         crossover = "✨ Golden Cross (SMA7 ↑ SMA30)"
     elif prev_sma7 > prev_sma30 and sma7 < sma30:
         crossover = "⚠️ Death Cross (SMA7 ↓ SMA30)"
+    
+    # NEW: SMA200 crossovers (major institutional signals)
+    sma200_cross = ""
+    if prev.close <= prev_sma200 and latest.close > sma200:
+        sma200_cross = "🚀 MAJOR: Price crossed ABOVE 200MA"
+    elif prev.close >= prev_sma200 and latest.close < sma200:
+        sma200_cross = "💥 MAJOR: Price crossed BELOW 200MA"
+
+    # Distance from SMA200 (smart money context)
+    sma200_distance = ((latest.close - sma200) / sma200) * 100
+    sma200_context = ""
+    if abs(sma200_distance) > 20:
+        if sma200_distance > 0:
+            sma200_context = f"📈 Extended above 200MA (+{sma200_distance:.1f}%)"
+        else:
+            sma200_context = f"📉 Extended below 200MA ({sma200_distance:.1f}%)"
+    elif abs(sma200_distance) < 2:
+        sma200_context = "⚡ Near 200MA (Decision zone)"
 
     # Get MACD signal
     macd_signal = get_macd_signal(df, len(df) - 1)
@@ -291,8 +336,8 @@ def generate_signal(df, latest, prev, rsi_desc):
         else:
             volume_spike = "📊⚪️ Volume↑"
 
-    # Add smart money context
-    smart_money_context = get_smart_money_context(latest, volume_color, spike_ratio, latest.rsi)
+    # Enhanced smart money context with SMA200
+    smart_money_context = get_smart_money_context(latest, volume_color, spike_ratio, latest.rsi, sma200_distance)
 
     rsi_change = latest.rsi - prev.rsi
     rsi_momentum = ""
@@ -300,16 +345,21 @@ def generate_signal(df, latest, prev, rsi_desc):
         direction = "↗️ Accelerating" if rsi_change > 0 else "↘️ Decelerating"
         rsi_momentum = f"RSI {direction}"
 
-    parts = [flag, trend, price_vs_sma7, price_vs_sma30]
+    # Build signal parts
+    parts = [flag, trend, price_vs_sma7, price_vs_sma30, price_vs_sma200]
     if crossover:
         parts.append(crossover)
-    if macd_signal:  # Add MACD signal if present
+    if sma200_cross:  # Major SMA200 crossover
+        parts.append(sma200_cross)
+    if macd_signal:
         parts.append(macd_signal)
     if volume_spike:
         parts.append(volume_spike)
     parts.append(rsi_desc)
     if rsi_momentum:
         parts.append(rsi_momentum)
+    if sma200_context:
+        parts.append(sma200_context)
     if smart_money_context:
         parts.append(smart_money_context)
 
@@ -403,6 +453,7 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     flag = "📈 Bull" if any("Bull Flag" in part for part in current_parts) else "📉 Bear"
     above_sma7 = "✅" if any("Price ABOVE SMA7" in part for part in current_parts) else "🔻"
     above_sma30 = "✅" if any("Price ABOVE SMA30" in part for part in current_parts) else "🔻"
+    above_sma200 = "✅" if any("Price ABOVE SMA200" in part for part in current_parts) else "🔻"
     
     # Add MACD status
     macd_status = ""
@@ -442,7 +493,7 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     rsi_status = f"RSI:{latest.rsi:.0f}{rsi_arrow}"
     
     # Build main status line
-    status_parts = [flag, f"{above_sma7}SMA7", f"{above_sma30}SMA30"]
+    status_parts = [flag, f"{above_sma7}SMA7", f"{above_sma30}SMA30", f"{above_sma200}SMA200"]
     if macd_status:
         status_parts.append(f"{macd_status}MACD")
     status_parts.append(rsi_status)
