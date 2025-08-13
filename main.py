@@ -145,7 +145,6 @@ def get_macd_signal(df, latest_idx):
     
     # Current MACD relationship
     macd_above_signal = current.macd > current.macd_signal
-    prev_macd_above_signal = previous.macd > previous.macd_signal
     
     # Crossover detection (existing logic)
     bullish_crossover = (previous.macd <= previous.macd_signal and current.macd > current.macd_signal)
