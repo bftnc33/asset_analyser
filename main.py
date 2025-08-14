@@ -512,6 +512,10 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     
     # Add RSI momentum if present (and not already in arrow)
     for part in current_parts:
+        # Skip if we already have an RSI change message
+        if any("RSI" in change for change in key_changes):
+            continue
+
         if "RSI ↗️ Accelerating" in part:
             if not any("RSI" in change for change in key_changes) and not rsi_arrow:
                 key_changes.append(f"📈 RSI accelerating ({latest.rsi:.0f}↗️)")
