@@ -3,7 +3,7 @@ import json
 import logging
 import ta
 from alerts import send_email, send_telegram
-from data import fetch_crypto_data, fetch_stock_data
+from data_feeds import fetch_crypto_data, fetch_stock_data
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
