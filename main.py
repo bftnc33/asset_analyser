@@ -1,18 +1,15 @@
 import os
 import json
 import logging
-import pandas as pd
 import ta
-import ccxt
-import yfinance as yf
 from alerts import send_email, send_telegram
+from data import fetch_crypto_data, fetch_stock_data
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 # --- CONFIG ---
 SIGNAL_FILE = "signals.json"
-crypto_exchange = ccxt.kraken()
 timeframe = '1d'
 limit = 300
 
@@ -33,30 +30,6 @@ def load_previous_signals():
 def save_signals(signals):
     with open(SIGNAL_FILE, "w") as f:
         json.dump(signals, f, indent=2)
-
-# --- FETCHING FUNCTIONS ---
-def fetch_crypto_data(symbol):
-    ohlcv = crypto_exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
-    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    return df
-
-def fetch_stock_data(ticker):
-    df = yf.download(ticker, period='300d', interval='1d', progress=False, auto_adjust=True)
-    if df.empty:
-        raise ValueError("No data fetched")
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    df.reset_index(inplace=True)
-    df.rename(columns={
-        'Date': 'timestamp',
-        'Close': 'close',
-        'Open': 'open',
-        'High': 'high',
-        'Low': 'low',
-        'Volume': 'volume'
-    }, inplace=True)
-    return df
 
 # --- INDICATORS ---
 def add_indicators(df):
