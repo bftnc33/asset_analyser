@@ -528,8 +528,8 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     else:
         return main_line
 
-# --- ANALYZE ASSET ---
-def analyze_asset(symbol, df, is_crypto, prev_signals, new_signals, new_alerts):
+# --- ANALYSE ASSET ---
+def analyse_asset(symbol, df, is_crypto, prev_signals, new_signals, new_alerts):
     df = add_indicators(df)
     df.dropna(inplace=True)
     if len(df) < 2:
@@ -560,7 +560,7 @@ if __name__ == "__main__":
     for symbol in crypto_symbols:
         try:
             df = fetch_crypto_data(symbol)
-            analyze_asset(symbol, df, is_crypto=True, prev_signals=prev_signals,
+            analyse_asset(symbol, df, is_crypto=True, prev_signals=prev_signals,
                           new_signals=new_signals, new_alerts=new_alerts)
         except Exception as e:
             logging.error(f"Error fetching crypto {symbol}: {e}")
@@ -568,7 +568,7 @@ if __name__ == "__main__":
     for ticker in stock_symbols:
         try:
             df = fetch_stock_data(ticker)
-            analyze_asset(ticker, df, is_crypto=False, prev_signals=prev_signals,
+            analyse_asset(ticker, df, is_crypto=False, prev_signals=prev_signals,
                           new_signals=new_signals, new_alerts=new_alerts)
         except Exception as e:
             logging.error(f"Error fetching stock {ticker}: {e}")
