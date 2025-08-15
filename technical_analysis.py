@@ -186,6 +186,10 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     
     # Enhanced MACD change detection
     for part in current_parts:
+        # Skip if we already have a MACD change message
+        if any("MACD" in change for change in key_changes):
+            continue
+
         if "🚀 MACD Bullish Cross" in part and not any("MACD" in change for change in key_changes):
             key_changes.append("🚀 MACD Bull Cross")
         elif "⚠️ MACD Bearish Cross" in part and not any("MACD" in change for change in key_changes):
