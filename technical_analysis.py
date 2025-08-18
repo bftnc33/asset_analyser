@@ -42,7 +42,7 @@ def diff_signal_parts(old_signal, new_signal):
     
     return " | ".join(enhanced_signal_parts)
 
-# --- ENHANCED FORMAT OUTPUT ---
+# --- FORMAT OUTPUT ---
 def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes=None):
     # Determine currency and formatting
     if symbol.endswith("SGLN.L"):
@@ -252,35 +252,6 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     else:
         return main_line
 
-# --- SMART MONEY CONTEXT ---
-def get_smart_money_context(latest, volume_color, spike_ratio, rsi_value, sma200_distance):
-    """Enhanced smart money interpretation including SMA200 context"""
-    price_change_pct = ((latest.close - latest.open) / latest.open) * 100
-    
-    # Enhanced logic with SMA200 context
-    if volume_color == "red" and abs(price_change_pct) < 0.5 and spike_ratio > 1.5:
-        if sma200_distance > 10:
-            return "🔍 Smart Money: Distribution (Extended above 200MA)"
-        else:
-            return "🔍 Smart Money: Distribution (Heavy selling, minimal price impact)"
-    elif volume_color == "green" and abs(price_change_pct) < 0.5 and spike_ratio > 1.5:
-        if sma200_distance < -10:
-            return "🔍 Smart Money: Accumulation (Oversold vs 200MA)"
-        else:
-            return "🔍 Smart Money: Accumulation (Heavy buying, controlled price)"
-    elif volume_color == "red" and price_change_pct < -2 and rsi_value < 40:
-        if abs(sma200_distance) < 5:
-            return "🔍 Smart Money: 200MA support test"
-        else:
-            return "🔍 Smart Money: Capitulation absorbed"
-    elif volume_color == "green" and price_change_pct > 2 and rsi_value > 60:
-        if sma200_distance > 15:
-            return "🔍 Smart Money: FOMO buying (Extended from 200MA)"
-        else:
-            return "🔍 Smart Money: FOMO buying (Caution)"
-    
-    return ""
-
 # --- VOLUME COLOR DETECTION ---
 def get_volume_color(df, latest_idx):
     """Determine if volume candle is green (buying) or red (selling)"""
@@ -380,10 +351,10 @@ def generate_signal(df, latest, prev, rsi_desc):
         if latest.close > sma200:
             flag = "📈 Bull Flag (Above 200MA)"
         else:
-            flag = "📈 Bull Flag (Below 200MA - Counter-trend)"
+            flag = "📈 Bull Flag (Below 200MA)"
     else:
         if latest.close > sma200:
-            flag = "📉 Bear Flag (Above 200MA - Counter-trend)"
+            flag = "📉 Bear Flag (Above 200MA)"
         else:
             flag = "📉 Bear Flag (Below 200MA)"
 
@@ -392,30 +363,19 @@ def generate_signal(df, latest, prev, rsi_desc):
     price_vs_sma30 = "✅ Price ABOVE SMA30" if latest.close > sma30 else "🔻 Price BELOW SMA30"
     price_vs_sma200 = "✅ Price ABOVE SMA200" if latest.close > sma200 else "🔻 Price BELOW SMA200"
 
-    # Enhanced crossover detection including SMA200
+    # SMA7 and SMA30 crossover detection
     crossover = ""
     if prev_sma7 < prev_sma30 and sma7 > sma30:
         crossover = "✨ Golden Cross (SMA7 ↑ SMA30)"
     elif prev_sma7 > prev_sma30 and sma7 < sma30:
         crossover = "⚠️ Death Cross (SMA7 ↓ SMA30)"
     
-    # NEW: SMA200 crossovers (major institutional signals)
+    # SMA200 crossover detection
     sma200_cross = ""
     if prev.close <= prev_sma200 and latest.close > sma200:
-        sma200_cross = "🚀 MAJOR: Price crossed ABOVE 200MA"
+        sma200_cross = "🚀 Price crossed ABOVE 200MA"
     elif prev.close >= prev_sma200 and latest.close < sma200:
-        sma200_cross = "💥 MAJOR: Price crossed BELOW 200MA"
-
-    # Distance from SMA200 (smart money context)
-    sma200_distance = ((latest.close - sma200) / sma200) * 100
-    sma200_context = ""
-    if abs(sma200_distance) > 20:
-        if sma200_distance > 0:
-            sma200_context = f"📈 Extended above 200MA (+{sma200_distance:.1f}%)"
-        else:
-            sma200_context = f"📉 Extended below 200MA ({sma200_distance:.1f}%)"
-    elif abs(sma200_distance) < 2:
-        sma200_context = "⚡ Near 200MA (Decision zone)"
+        sma200_cross = "💥 Price crossed BELOW 200MA"
 
     # Get MACD signal
     macd_signal = get_macd_signal(df, len(df) - 1)
@@ -447,9 +407,6 @@ def generate_signal(df, latest, prev, rsi_desc):
         else:
             volume_spike = "📊⚪️ Volume↑"
 
-    # Enhanced smart money context with SMA200
-    smart_money_context = get_smart_money_context(latest, volume_color, spike_ratio, latest.rsi, sma200_distance)
-
     rsi_change = latest.rsi - prev.rsi
     rsi_momentum = ""
     if abs(rsi_change) > 5:
@@ -469,25 +426,21 @@ def generate_signal(df, latest, prev, rsi_desc):
     parts.append(rsi_desc)
     if rsi_momentum:
         parts.append(rsi_momentum)
-    if sma200_context:
-        parts.append(sma200_context)
-    if smart_money_context:
-        parts.append(smart_money_context)
 
     return " | ".join(parts)
 
 # --- RSI DESCRIPTION ---
 def describe_rsi(rsi_value):
     if rsi_value < 30:
-        return "🟢 RSI OVERSOLD (Consider Buying)"
+        return "🟢 RSI OVERSOLD"
     elif rsi_value < 40:
-        return "🟡 RSI Near Oversold (Monitor)"
+        return "🟡 RSI Near Oversold"
     elif rsi_value <= 60:
         return "⚪️ RSI Neutral"
     elif rsi_value <= 70:
-        return "🟡 RSI Near Overbought (Monitor)"
+        return "🟡 RSI Near Overbought"
     else:
-        return "🔴 RSI OVERBOUGHT (Consider Selling)"
+        return "🔴 RSI OVERBOUGHT"
 
 # --- INDICATORS ---
 def add_indicators(df):
