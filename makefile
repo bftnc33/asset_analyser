@@ -29,4 +29,4 @@ clean:
 
 lint:
 	@echo "Checking linting using ruff..."
-	ruff check main.py
+	ruff check .
