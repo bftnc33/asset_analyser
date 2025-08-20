@@ -88,7 +88,7 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     
     # Build compact status line using only current status
     current_parts = [extract_current_status(part) for part in signal_parts]
-    
+
     flag = "📈 Bull" if any("Bull Flag" in part for part in current_parts) else "📉 Bear"
     above_sma7 = "✅" if any("Price ABOVE SMA7" in part for part in current_parts) else "🔻"
     above_sma30 = "✅" if any("Price ABOVE SMA30" in part for part in current_parts) else "🔻"
@@ -96,31 +96,31 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     
     # Add MACD status
     macd_status = ""
-    
-    # Priority order for MACD display
-    if any("MACD Bullish Cross" in part for part in current_parts):
-        macd_status = "🚀"
-    elif any("MACD Bearish Cross" in part for part in current_parts):
-        macd_status = "⚠️"
-    elif any("MACD Strong Bull" in part for part in current_parts):
-        macd_status = "🔥"
-    elif any("MACD Strong Bear" in part for part in current_parts):
-        macd_status = "🔻"
-    elif any("MACD Momentum+" in part for part in current_parts):
-        macd_status = "📈"
-    elif any("MACD Momentum-" in part for part in current_parts):
-        macd_status = "📉"
-    elif any("MACD Accelerating" in part for part in current_parts):
-        macd_status = "⬆️"
-    elif any("MACD Decelerating" in part for part in current_parts):
-        macd_status = "⬇️"
-    else:
-        # Fallback to basic above/below signal line
-        if hasattr(latest, 'macd') and hasattr(latest, 'macd_signal'):
-            if latest.macd > latest.macd_signal:
-                macd_status = "✅"
-            else:
-                macd_status = "🔻"
+    for part in current_parts:
+        if "🚀 MACD Bullish Cross" in part:
+            macd_status = "🚀"
+            break
+        elif "⚠️ MACD Bearish Cross" in part:
+            macd_status = "⚠️"
+            break
+        elif "🔥 MACD Strong Bull" in part:
+            macd_status = "🔥"
+            break
+        elif "🔻 MACD Strong Bear" in part:
+            macd_status = "🔻"
+            break
+        elif "✅⬆️ MACD" in part:
+            macd_status = "✅⬆️"
+            break
+        elif "✅⬇️ MACD" in part:
+            macd_status = "✅⬇️"
+            break
+        elif "🔻⬆️ MACD" in part:
+            macd_status = "🔻⬆️"
+            break
+        elif "🔻⬇️ MACD" in part:
+            macd_status = "🔻⬇️"
+            break
     
     # RSI with momentum arrow if accelerating
     rsi_arrow = ""
@@ -272,74 +272,48 @@ def get_volume_color(df, latest_idx):
 
 # --- MACD SIGNAL DETECTION ---
 def get_macd_signal(df, latest_idx):
-    if latest_idx < 2:  # Need at least 3 data points
+    if latest_idx < 2:
         return ""
     
-    current = df.iloc[latest_idx]
-    previous = df.iloc[latest_idx - 1]
-    two_days_ago = df.iloc[latest_idx - 2]
-    
-    # Current MACD relationship
-    macd_above_signal = current.macd > current.macd_signal
-    
-    # Crossover detection (existing logic)
-    bullish_crossover = (previous.macd <= previous.macd_signal and current.macd > current.macd_signal)
-    bearish_crossover = (previous.macd >= previous.macd_signal and current.macd < current.macd_signal)
-    
-    # NEW: Momentum change detection
-    macd_momentum_change = current.macd - previous.macd
-    prev_momentum_change = previous.macd - two_days_ago.macd
-    momentum_acceleration = macd_momentum_change - prev_momentum_change
-    
-    # NEW: Histogram momentum (more sensitive)
-    histogram_change = current.macd_histogram - previous.macd_histogram
-    prev_histogram_change = previous.macd_histogram - two_days_ago.macd_histogram
-    
-    # Priority 1: Actual crossovers (existing logic)
-    if bullish_crossover:
-        return "🚀 MACD Bullish Cross"
-    elif bearish_crossover:
-        return "⚠️ MACD Bearish Cross"
-    
-    # Priority 2: Strong momentum signals (existing logic)
-    elif macd_above_signal and current.macd_histogram > 0:
-        if current.macd_histogram > previous.macd_histogram * 1.5:
-            return "🔥 MACD Strong Bull"
-    elif not macd_above_signal and current.macd_histogram < 0:
-        if current.macd_histogram < previous.macd_histogram * 1.5:
-            return "🔻 MACD Strong Bear"
-    
-    # Priority 3: NEW - Momentum building (no crossover yet)
-    elif macd_above_signal:  # MACD above signal line
-        # Bullish momentum building
-        if histogram_change > 0 and abs(histogram_change) > abs(prev_histogram_change) * 1.2:
-            return "📈 MACD Momentum+"
-        # Bullish momentum weakening
-        elif histogram_change < 0 and abs(histogram_change) > abs(prev_histogram_change) * 1.2:
-            return "📉 MACD Momentum-"
-    
-    elif not macd_above_signal:  # MACD below signal line
-        # Bearish momentum building (getting more negative)
-        if histogram_change < 0 and abs(histogram_change) > abs(prev_histogram_change) * 1.2:
-            return "📉 MACD Momentum-"
-        # Bearish momentum weakening (getting less negative)
-        elif histogram_change > 0 and abs(histogram_change) > abs(prev_histogram_change) * 1.2:
-            return "📈 MACD Momentum+"
-    
-    # Priority 4: NEW - Subtle trend changes
-    if abs(momentum_acceleration) > 0.01:  # Adjust threshold as needed
-        if macd_above_signal:
-            if momentum_acceleration > 0:
-                return "⬆️ MACD Accelerating"
-            else:
-                return "⬇️ MACD Decelerating"
-        else:
-            if momentum_acceleration < 0:
-                return "⬇️ MACD Accelerating"  # More bearish = accelerating downward
-            else:
-                return "⬆️ MACD Decelerating"  # Less bearish = decelerating downward
-    
-    return ""
+    try:
+        current = df.iloc[latest_idx]
+        previous = df.iloc[latest_idx - 1]
+        two_days_ago = df.iloc[latest_idx - 2]
+        
+        # Part 1: MACD Position (positive/negative)
+        macd_above_signal = current.macd > current.macd_signal
+        
+        # Part 2: MACD Momentum (higher/lower than previous)
+        macd_momentum_up = current.macd > previous.macd
+        
+        # Crossover detection (highest priority)
+        bullish_crossover = (previous.macd <= previous.macd_signal and current.macd > current.macd_signal)
+        bearish_crossover = (previous.macd >= previous.macd_signal and current.macd < current.macd_signal)
+        
+        # Priority 1: Actual crossovers
+        if bullish_crossover:
+            return "🚀 MACD Bullish Cross"
+        elif bearish_crossover:
+            return "⚠️ MACD Bearish Cross"
+        
+        # Priority 2: Strong momentum signals
+        elif macd_above_signal and current.macd_histogram > 0:
+            if current.macd_histogram > previous.macd_histogram * 1.5:
+                return "🔥 MACD Strong Bull"
+        elif not macd_above_signal and current.macd_histogram < 0:
+            if current.macd_histogram < previous.macd_histogram * 1.5:
+                return "🔻 MACD Strong Bear"
+        
+        # Priority 3: Two-part MACD system (this should always execute if no crossover/strong signal)
+        position_indicator = "✅" if macd_above_signal else "🔻"
+        momentum_indicator = "⬆️" if macd_momentum_up else "⬇️"
+        
+        result = f"{position_indicator}{momentum_indicator} MACD"
+        return result
+        
+    except Exception as e:
+        print(f"ERROR in get_macd_signal: {e}")
+        return ""
 
 # --- SIGNAL GENERATION ---
 def generate_signal(df, latest, prev, rsi_desc):
