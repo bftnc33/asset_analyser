@@ -4,6 +4,7 @@ import os
 import smtplib
 import requests
 from email.message import EmailMessage
+from email.utils import formatdate
 from dotenv import load_dotenv
 
 # --- Setup Logging ---
@@ -25,6 +26,7 @@ def send_email(subject, body):
     msg['Subject'] = subject
     msg['From'] = EMAIL_ADDRESS
     msg['To'] = EMAIL_ADDRESS
+    msg['Date'] = formatdate(localtime=True)
     msg.set_content("This email requires an HTML-capable viewer.")
     msg.add_alternative(body, subtype='html')
 
