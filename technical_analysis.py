@@ -31,8 +31,8 @@ def diff_signal_parts(old_signal, new_signal):
             # Check for similar categories that should show "was:" format
             if (('Bull Flag' in new_item or 'Bear Flag' in new_item) and ('Bull Flag' in old_item or 'Bear Flag' in old_item)) or \
                (('Daily UP' in new_item or 'Daily DOWN' in new_item) and ('Daily UP' in old_item or 'Daily DOWN' in old_item)) or \
-               (('ABOVE SMA7' in new_item or 'BELOW SMA7' in new_item) and ('ABOVE SMA7' in old_item or 'BELOW SMA7' in old_item)) or \
-               (('ABOVE SMA30' in new_item or 'BELOW SMA30' in new_item) and ('ABOVE SMA30' in old_item or 'BELOW SMA30' in old_item)) or \
+               (('ABOVE SMA20' in new_item or 'BELOW SMA20' in new_item) and ('ABOVE SMA20' in old_item or 'BELOW SMA20' in old_item)) or \
+               (('ABOVE SMA50' in new_item or 'BELOW SMA50' in new_item) and ('ABOVE SMA50' in old_item or 'BELOW SMA50' in old_item)) or \
                (('RSI' in new_item and 'RSI' in old_item)) or \
                (('MACD' in new_item and 'MACD' in old_item)):  # Added MACD change detection
                 enhanced_part = f"{new_item} (was: {old_item})"
@@ -90,8 +90,8 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     current_parts = [extract_current_status(part) for part in signal_parts]
 
     flag = "📈 Bull" if any("Bull Flag" in part for part in current_parts) else "📉 Bear"
-    above_sma7 = "✅" if any("Price ABOVE SMA7" in part for part in current_parts) else "🔻"
-    above_sma30 = "✅" if any("Price ABOVE SMA30" in part for part in current_parts) else "🔻"
+    above_sma20 = "✅" if any("Price ABOVE SMA20" in part for part in current_parts) else "🔻"
+    above_sma50 = "✅" if any("Price ABOVE SMA50" in part for part in current_parts) else "🔻"
     above_sma200 = "✅" if any("Price ABOVE SMA200" in part for part in current_parts) else "🔻"
     
     # Add MACD status
@@ -132,7 +132,7 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     rsi_status = f"RSI:{latest.rsi:.0f}{rsi_arrow}"
     
     # Build main status line
-    status_parts = [flag, f"{above_sma7}SMA7", f"{above_sma30}SMA30", f"{above_sma200}SMA200"]
+    status_parts = [flag, f"{above_sma20}SMA20", f"{above_sma50}SMA50", f"{above_sma200}SMA200"]
     if macd_status:
         status_parts.append(f"{macd_status}MACD")
     status_parts.append(rsi_status)
@@ -146,14 +146,14 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
         part = part.strip()
         if "(was:" in part:
             # Extract the change
-            if "ABOVE SMA7" in part and "was: 🔻 Price BELOW SMA7" in part:
-                key_changes.append("✅ Broke ABOVE SMA7")
-            elif "BELOW SMA7" in part and "was: ✅ Price ABOVE SMA7" in part:
-                key_changes.append("🔻 Broke BELOW SMA7")
-            elif "ABOVE SMA30" in part and "was: 🔻 Price BELOW SMA30" in part:
-                key_changes.append("✅ Broke ABOVE SMA30")
-            elif "BELOW SMA30" in part and "was: ✅ Price ABOVE SMA30" in part:
-                key_changes.append("🔻 Broke BELOW SMA30")
+            if "ABOVE SMA20" in part and "was: 🔻 Price BELOW SMA20" in part:
+                key_changes.append("✅ Broke ABOVE SMA20")
+            elif "BELOW SMA20" in part and "was: ✅ Price ABOVE SMA20" in part:
+                key_changes.append("🔻 Broke BELOW SMA20")
+            elif "ABOVE SMA50" in part and "was: 🔻 Price BELOW SMA50" in part:
+                key_changes.append("✅ Broke ABOVE SMA50")
+            elif "BELOW SMA50" in part and "was: ✅ Price ABOVE SMA50" in part:
+                key_changes.append("🔻 Broke BELOW SMA50")
             elif "Bull Flag" in part and "was: 📉 Bear Flag" in part:
                 key_changes.append("📈 Turned BULLISH")
             elif "Bear Flag" in part and "was: 📈 Bull Flag" in part:
@@ -317,11 +317,11 @@ def get_macd_signal(df, latest_idx):
 
 # --- SIGNAL GENERATION ---
 def generate_signal(df, latest, prev, rsi_desc):
-    sma7, sma30, sma200 = latest.sma7, latest.sma30, latest.sma200
-    prev_sma7, prev_sma30, prev_sma200 = prev.sma7, prev.sma30, prev.sma200
+    sma20, sma50, sma200 = latest.sma20, latest.sma50, latest.sma200
+    prev_sma20, prev_sma50, prev_sma200 = prev.sma20, prev.sma50, prev.sma200
 
     # Enhanced flag logic with SMA200 context
-    if sma7 > sma30:
+    if sma20 > sma50:
         if latest.close > sma200:
             flag = "📈 Bull Flag (Above 200MA)"
         else:
@@ -333,16 +333,16 @@ def generate_signal(df, latest, prev, rsi_desc):
             flag = "📉 Bear Flag (Below 200MA)"
 
     trend = "🔼 Daily UP" if latest.close > prev.close else "🔽 Daily DOWN"
-    price_vs_sma7 = "✅ Price ABOVE SMA7" if latest.close > sma7 else "🔻 Price BELOW SMA7" 
-    price_vs_sma30 = "✅ Price ABOVE SMA30" if latest.close > sma30 else "🔻 Price BELOW SMA30"
+    price_vs_sma20 = "✅ Price ABOVE SMA20" if latest.close > sma20 else "🔻 Price BELOW SMA20" 
+    price_vs_sma50 = "✅ Price ABOVE SMA50" if latest.close > sma50 else "🔻 Price BELOW SMA50"
     price_vs_sma200 = "✅ Price ABOVE SMA200" if latest.close > sma200 else "🔻 Price BELOW SMA200"
 
-    # SMA7 and SMA30 crossover detection
+    # SMA20 and SMA50 crossover detection
     crossover = ""
-    if prev_sma7 < prev_sma30 and sma7 > sma30:
-        crossover = "✨ Golden Cross (SMA7 ↑ SMA30)"
-    elif prev_sma7 > prev_sma30 and sma7 < sma30:
-        crossover = "⚠️ Death Cross (SMA7 ↓ SMA30)"
+    if prev_sma20 < prev_sma50 and sma20 > sma50:
+        crossover = "✨ Golden Cross (SMA20 ↑ SMA50)"
+    elif prev_sma20 > prev_sma50 and sma20 < sma50:
+        crossover = "⚠️ Death Cross (SMA20 ↓ SMA50)"
     
     # SMA200 crossover detection
     sma200_cross = ""
@@ -388,7 +388,7 @@ def generate_signal(df, latest, prev, rsi_desc):
         rsi_momentum = f"RSI {direction}"
 
     # Build signal parts
-    parts = [flag, trend, price_vs_sma7, price_vs_sma30, price_vs_sma200]
+    parts = [flag, trend, price_vs_sma20, price_vs_sma50, price_vs_sma200]
     if crossover:
         parts.append(crossover)
     if sma200_cross:  # Major SMA200 crossover
@@ -418,8 +418,8 @@ def describe_rsi(rsi_value):
 
 # --- INDICATORS ---
 def add_indicators(df):
-    df['sma7'] = ta.trend.sma_indicator(df['close'], window=7)
-    df['sma30'] = ta.trend.sma_indicator(df['close'], window=30)
+    df['sma20'] = ta.trend.sma_indicator(df['close'], window=20)
+    df['sma50'] = ta.trend.sma_indicator(df['close'], window=50)
     df['sma200'] = ta.trend.sma_indicator(df['close'], window=200)
     df['rsi'] = ta.momentum.rsi(df['close'], window=14)
     df['vol_avg'] = df['volume'].ewm(span=20, adjust=False).mean()
