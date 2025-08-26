@@ -90,9 +90,9 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     current_parts = [extract_current_status(part) for part in signal_parts]
 
     flag = "📈 Bull" if any("Bull Flag" in part for part in current_parts) else "📉 Bear"
-    above_sma20 = "✅" if any("Price ABOVE SMA20" in part for part in current_parts) else "🔻"
-    above_sma50 = "✅" if any("Price ABOVE SMA50" in part for part in current_parts) else "🔻"
-    above_sma200 = "✅" if any("Price ABOVE SMA200" in part for part in current_parts) else "🔻"
+    above_sma20 = "✅" if any(part == "✅ Price ABOVE SMA20" for part in current_parts) else "🔻"
+    above_sma50 = "✅" if any(part == "✅ Price ABOVE SMA50" for part in current_parts) else "🔻"
+    above_sma200 = "✅" if any(part == "✅ Price ABOVE SMA200" for part in current_parts) else "🔻"
     
     # Add MACD status
     macd_status = ""
