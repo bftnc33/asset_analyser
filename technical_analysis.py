@@ -1,5 +1,6 @@
 import logging
 import ta
+import pandas as pd
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -17,29 +18,25 @@ def diff_signal_parts(old_signal, new_signal):
     old_items = set(extract_items(old_signal))
     new_items_list = extract_items(new_signal)
     new_items_set = set(new_items_list)
-
     removed = old_items - new_items_set
 
     # Build signal with (was: old_value) for changed items
     enhanced_signal_parts = []
-    
     for new_item in new_items_list:
         enhanced_part = new_item
-        
         # Check if this new item replaces an old one (same category)
         for old_item in removed:
             # Check for similar categories that should show "was:" format
             if (('Bull Flag' in new_item or 'Bear Flag' in new_item) and ('Bull Flag' in old_item or 'Bear Flag' in old_item)) or \
-               (('Daily UP' in new_item or 'Daily DOWN' in new_item) and ('Daily UP' in old_item or 'Daily DOWN' in old_item)) or \
-               (('ABOVE SMA20' in new_item or 'BELOW SMA20' in new_item) and ('ABOVE SMA20' in old_item or 'BELOW SMA20' in old_item)) or \
-               (('ABOVE SMA50' in new_item or 'BELOW SMA50' in new_item) and ('ABOVE SMA50' in old_item or 'BELOW SMA50' in old_item)) or \
-               (('RSI' in new_item and 'RSI' in old_item)) or \
-               (('MACD' in new_item and 'MACD' in old_item)):  # Added MACD change detection
+               (('Weekly UP' in new_item or 'Weekly DOWN' in new_item) and ('Weekly UP' in old_item or 'Weekly DOWN' in old_item)) or \
+               (('ABOVE SMA8' in new_item or 'BELOW SMA8' in new_item) and ('ABOVE SMA8' in old_item or 'BELOW SMA8' in old_item)) or \
+               (('ABOVE SMA21' in new_item or 'BELOW SMA21' in new_item) and ('ABOVE SMA21' in old_item or 'BELOW SMA21' in old_item)) or \
+               (('ABOVE SMA55' in new_item or 'BELOW SMA55' in new_item) and ('ABOVE SMA55' in old_item or 'BELOW SMA55' in old_item)) or \
+               (('MACD' in new_item and 'MACD' in old_item)):
                 enhanced_part = f"{new_item} (was: {old_item})"
                 break
-        
         enhanced_signal_parts.append(enhanced_part)
-    
+
     return " | ".join(enhanced_signal_parts)
 
 # --- FORMAT OUTPUT ---
@@ -72,28 +69,27 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
         price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
         current_close = latest.close
         previous_close = previous.close
-    
+
     price_change = ((current_close - previous_close) / previous_close) * 100
     change_color = "🟢" if price_change > 0 else "🔴" if price_change < 0 else "⚪️"
-    
+
     # Parse the signal to build current status
     signal_parts = signal.split(' | ')
-    
+
     # Extract only the current status (before any "was:" text)
     def extract_current_status(part):
         """Extract the current status from a signal part, ignoring (was: ...) sections"""
         if "(was:" in part:
             return part.split("(was:")[0].strip()
         return part.strip()
-    
+
     # Build compact status line using only current status
     current_parts = [extract_current_status(part) for part in signal_parts]
-
     flag = "📈 Bull" if any("Bull Flag" in part for part in current_parts) else "📉 Bear"
-    above_sma20 = "✅" if any(part == "✅ Price ABOVE SMA20" for part in current_parts) else "🔻"
-    above_sma50 = "✅" if any(part == "✅ Price ABOVE SMA50" for part in current_parts) else "🔻"
-    above_sma200 = "✅" if any(part == "✅ Price ABOVE SMA200" for part in current_parts) else "🔻"
-    
+    above_sma8 = "✅" if any(part == "✅ Price ABOVE SMA8" for part in current_parts) else "🔻"
+    above_sma21 = "✅" if any(part == "✅ Price ABOVE SMA21" for part in current_parts) else "🔻"
+    above_sma55 = "✅" if any(part == "✅ Price ABOVE SMA55" for part in current_parts) else "🔻"
+
     # Add MACD status
     macd_status = ""
     for part in current_parts:
@@ -121,51 +117,58 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
         elif "🔻⬇️ MACD" in part:
             macd_status = "🔻⬇️"
             break
-    
+
     # RSI with momentum arrow if accelerating
     rsi_arrow = ""
     if any("RSI ↗️ Accelerating" in part for part in current_parts):
         rsi_arrow = "↗️"
     elif any("RSI ↘️ Decelerating" in part for part in current_parts):
         rsi_arrow = "↘️"
-    
+
     rsi_status = f"RSI:{latest.rsi:.0f}{rsi_arrow}"
-    
+
     # Build main status line
-    status_parts = [flag, f"{above_sma20}SMA20", f"{above_sma50}SMA50", f"{above_sma200}SMA200"]
+    status_parts = [flag, f"{above_sma8}SMA8", f"{above_sma21}SMA21", f"{above_sma55}SMA55"]
     if macd_status:
         status_parts.append(f"{macd_status}MACD")
     status_parts.append(rsi_status)
-    
+
     main_line = f"{symbol}: {currency}{price_fmt.format(current_close)}{suffix} {change_color}{price_change:+.1f}% | {' | '.join(status_parts)}"
-    
+
     # Extract key changes for second line
     key_changes = []
-    
     for part in signal_parts:
         part = part.strip()
         if "(was:" in part:
             # Extract the change
-            if "ABOVE SMA20" in part and "was: 🔻 Price BELOW SMA20" in part:
-                key_changes.append("✅ Broke ABOVE SMA20")
-            elif "BELOW SMA20" in part and "was: ✅ Price ABOVE SMA20" in part:
-                key_changes.append("🔻 Broke BELOW SMA20")
-            elif "ABOVE SMA50" in part and "was: 🔻 Price BELOW SMA50" in part:
-                key_changes.append("✅ Broke ABOVE SMA50")
-            elif "BELOW SMA50" in part and "was: ✅ Price ABOVE SMA50" in part:
-                key_changes.append("🔻 Broke BELOW SMA50")
+            if "ABOVE SMA8" in part and "was: 🔻 Price BELOW SMA8" in part:
+                key_changes.append("✅ Broke ABOVE SMA8")
+            elif "BELOW SMA8" in part and "was: ✅ Price ABOVE SMA8" in part:
+                key_changes.append("🔻 Broke BELOW SMA8")
+            elif "ABOVE SMA21" in part and "was: 🔻 Price BELOW SMA21" in part:
+                key_changes.append("✅ Broke ABOVE SMA21")
+            elif "BELOW SMA21" in part and "was: ✅ Price ABOVE SMA21" in part:
+                key_changes.append("🔻 Broke BELOW SMA21")
+            elif "ABOVE SMA55" in part and "was: 🔻 Price BELOW SMA55" in part:
+                key_changes.append("✅ Broke ABOVE SMA55")
+            elif "BELOW SMA55" in part and "was: ✅ Price ABOVE SMA55" in part:
+                key_changes.append("🔻 Broke BELOW SMA55")
             elif "Bull Flag" in part and "was: 📉 Bear Flag" in part:
                 key_changes.append("📈 Turned BULLISH")
             elif "Bear Flag" in part and "was: 📈 Bull Flag" in part:
                 key_changes.append("📉 Turned BEARISH")
-            elif "Daily UP" in part and "was: 🔽 Daily DOWN" in part:
-                key_changes.append("🔼 Daily UP")
-            elif "Daily DOWN" in part and "was: 🔼 Daily UP" in part:
-                key_changes.append("🔽 Daily DOWN")
+            elif "Weekly UP" in part and "was: 🔽 Weekly DOWN" in part:
+                key_changes.append("🔼 Weekly UP")
+            elif "Weekly DOWN" in part and "was: 🔼 Weekly UP" in part:
+                key_changes.append("🔽 Weekly DOWN")
             elif "Golden Cross" in part:
                 key_changes.append("✨ Golden Cross")
             elif "Death Cross" in part:
                 key_changes.append("⚠️ Death Cross")
+            elif "Major Bull Cross" in part:
+                key_changes.append("🌟 Major Bull Cross (10>21>50)")
+            elif "Major Bear Cross" in part:
+                key_changes.append("💀 Major Bear Cross (10<21<50)")
             elif "MACD Bullish Cross" in part:
                 key_changes.append("🚀 MACD Bull Cross")
             elif "MACD Bearish Cross" in part:
@@ -180,16 +183,12 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
                     key_changes.append(f"🟡 RSI heating up ({latest.rsi:.0f}→overbought)")
                 elif "Near Oversold" in part:
                     key_changes.append(f"🟡 RSI cooling ({latest.rsi:.0f}→oversold)")
-                elif "Neutral" in part and "was:" in part:
-                    if latest.rsi > 55:
-                        key_changes.append(f"⚪️ RSI normalizing ({latest.rsi:.0f})")
-    
+
     # Enhanced MACD change detection
     for part in current_parts:
         # Skip if we already have a MACD change message
         if any("MACD" in change for change in key_changes):
             continue
-
         if "🚀 MACD Bullish Cross" in part and not any("MACD" in change for change in key_changes):
             key_changes.append("🚀 MACD Bull Cross")
         elif "⚠️ MACD Bearish Cross" in part and not any("MACD" in change for change in key_changes):
@@ -198,53 +197,17 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
             key_changes.append("🔥 MACD Strong Bull")
         elif "🔻 MACD Strong Bear" in part:
             key_changes.append("🔻 MACD Strong Bear")
-        elif "📈 MACD Momentum+" in part:
-            key_changes.append("📈 MACD Building")
-        elif "📉 MACD Momentum-" in part:
-            key_changes.append("📉 MACD Weakening")
-        elif "⬆️ MACD Accelerating" in part:
-            key_changes.append("⬆️ MACD Accelerating")
-        elif "⬇️ MACD Decelerating" in part:
-            key_changes.append("⬇️ MACD Decelerating")
-    
-    # Add RSI momentum if present (and not already in arrow)
-    for part in current_parts:
-        # Skip if we already have an RSI change message
-        if any("RSI" in change for change in key_changes):
-            continue
 
-        if "RSI ↗️ Accelerating" in part:
-            if not any("RSI" in change for change in key_changes) and not rsi_arrow:
-                key_changes.append(f"📈 RSI accelerating ({latest.rsi:.0f}↗️)")
-        elif "RSI ↘️ Decelerating" in part:
-            if not any("RSI" in change for change in key_changes) and not rsi_arrow:
-                key_changes.append(f"📉 RSI decelerating ({latest.rsi:.0f}↘️)")
-    
-    # Enhanced volume spikes with color
-    for part in current_parts:
-        if "🟢" in part and "BUYING SURGE" in part:
-            key_changes.append("🟢📊 BUYING SURGE")
-        elif "🔴" in part and "SELLING PRESSURE" in part:
-            key_changes.append("🔴📊 SELLING PRESSURE") 
-        elif "🟢" in part and "BUYING Interest" in part:
-            key_changes.append("🟢📊 Buying Interest")
-        elif "🔴" in part and "SELLING Pressure" in part:
-            key_changes.append("🔴📊 Selling Pressure")
-        elif "🟢" in part and "Volume↑ (Buying)" in part:
-            key_changes.append("🟢📊 Volume↑")
-        elif "🔴" in part and "Volume↑ (Selling)" in part:
-            key_changes.append("🔴📊 Volume↑")
-        elif "Volume Spike: 🚨 Severe" in part:  # Keep existing neutral logic
-            key_changes.append("📊 VOLUME SURGE")
-        elif "Smart Money: Distribution" in part:
-            key_changes.append("🔍 Distribution")
-        elif "Smart Money: Accumulation" in part:
-            key_changes.append("🔍 Accumulation")
-        elif "Smart Money: Capitulation absorbed" in part:
-            key_changes.append("🔍 Capitulation absorbed")
-        elif "Smart Money: FOMO buying" in part:
-            key_changes.append("🔍 FOMO buying")
-    
+    # Add current RSI conditions if extreme
+    if "🟢 RSI OVERSOLD" in rsi_desc and not any("RSI" in change for change in key_changes):
+        key_changes.append(f"🟢 RSI OVERSOLD ({latest.rsi:.0f})")
+    elif "🔴 RSI OVERBOUGHT" in rsi_desc and not any("RSI" in change for change in key_changes):
+        key_changes.append(f"🔴 RSI OVERBOUGHT ({latest.rsi:.0f})")
+    elif "🟡 RSI Near Overbought" in rsi_desc and not any("RSI" in change for change in key_changes):
+        key_changes.append(f"🟡 RSI heating up ({latest.rsi:.0f}→overbought)")
+    elif "🟡 RSI Near Oversold" in rsi_desc and not any("RSI" in change for change in key_changes):
+        key_changes.append(f"🟡 RSI cooling ({latest.rsi:.0f}→oversold)")
+
     # Return format: always show status line, add changes if any
     if key_changes:
         changes_line = f"   {' | '.join(key_changes)}"
@@ -278,7 +241,6 @@ def get_macd_signal(df, latest_idx):
     try:
         current = df.iloc[latest_idx]
         previous = df.iloc[latest_idx - 1]
-        two_days_ago = df.iloc[latest_idx - 2]
         
         # Part 1: MACD Position (positive/negative)
         macd_above_signal = current.macd > current.macd_signal
@@ -296,161 +258,188 @@ def get_macd_signal(df, latest_idx):
         elif bearish_crossover:
             return "⚠️ MACD Bearish Cross"
         
-        # Priority 2: Strong momentum signals
+        # Priority 2: Strong momentum signals (weekly timeframe requires bigger moves)
         elif macd_above_signal and current.macd_histogram > 0:
-            if current.macd_histogram > previous.macd_histogram * 1.5:
+            if current.macd_histogram > previous.macd_histogram * 2.0:  # Higher threshold for weekly
                 return "🔥 MACD Strong Bull"
         elif not macd_above_signal and current.macd_histogram < 0:
-            if current.macd_histogram < previous.macd_histogram * 1.5:
+            if current.macd_histogram < previous.macd_histogram * 2.0:  # Higher threshold for weekly
                 return "🔻 MACD Strong Bear"
         
-        # Priority 3: Two-part MACD system (this should always execute if no crossover/strong signal)
+        # Priority 3: Two-part MACD system
         position_indicator = "✅" if macd_above_signal else "🔻"
         momentum_indicator = "⬆️" if macd_momentum_up else "⬇️"
-        
         result = f"{position_indicator}{momentum_indicator} MACD"
-        return result
         
+        return result
+    
     except Exception as e:
         print(f"ERROR in get_macd_signal: {e}")
         return ""
 
 # --- SIGNAL GENERATION ---
 def generate_signal(df, latest, prev, rsi_desc):
-    sma20, sma50, sma200 = latest.sma20, latest.sma50, latest.sma200
-    prev_sma20, prev_sma50, prev_sma200 = prev.sma20, prev.sma50, prev.sma200
-
-    # Enhanced flag logic with SMA200 context
-    if sma20 > sma50:
-        if latest.close > sma200:
-            flag = "📈 Bull Flag (Above 200MA)"
-        else:
-            flag = "📈 Bull Flag (Below 200MA)"
-    else:
-        if latest.close > sma200:
-            flag = "📉 Bear Flag (Above 200MA)"
-        else:
-            flag = "📉 Bear Flag (Below 200MA)"
-
-    trend = "🔼 Daily UP" if latest.close > prev.close else "🔽 Daily DOWN"
-    price_vs_sma20 = "✅ Price ABOVE SMA20" if latest.close > sma20 else "🔻 Price BELOW SMA20" 
-    price_vs_sma50 = "✅ Price ABOVE SMA50" if latest.close > sma50 else "🔻 Price BELOW SMA50"
-    price_vs_sma200 = "✅ Price ABOVE SMA200" if latest.close > sma200 else "🔻 Price BELOW SMA200"
-
-    # SMA20 and SMA50 crossover detection
-    crossover = ""
-    if prev_sma20 < prev_sma50 and sma20 > sma50:
-        crossover = "✨ Golden Cross (SMA20 ↑ SMA50)"
-    elif prev_sma20 > prev_sma50 and sma20 < sma50:
-        crossover = "⚠️ Death Cross (SMA20 ↓ SMA50)"
+    sma8, sma21, sma55 = latest.sma8, latest.sma21, latest.sma55
+    prev_sma8, prev_sma21, prev_sma55 = prev.sma8, prev.sma21, prev.sma55
     
-    # SMA200 crossover detection
-    sma200_cross = ""
-    if prev.close <= prev_sma200 and latest.close > sma200:
-        sma200_cross = "🚀 Price crossed ABOVE 200MA"
-    elif prev.close >= prev_sma200 and latest.close < sma200:
-        sma200_cross = "💥 Price crossed BELOW 200MA"
+    # Fibonacci-based trend identification system
+    if sma8 > sma21 > sma55:
+        flag = "📈 Bull Flag (Perfect Fibonacci Alignment)"
+    elif sma8 < sma21 < sma55:
+        flag = "📉 Bear Flag (Perfect Fibonacci Alignment)"
+    else:
+        flag = "⚪️ Mixed Signals"
+    
+    trend = "🔼 Weekly UP" if latest.close > prev.close else "🔽 Weekly DOWN"
+    price_vs_sma8 = "✅ Price ABOVE SMA8" if latest.close > sma8 else "🔻 Price BELOW SMA8"
+    price_vs_sma21 = "✅ Price ABOVE SMA21" if latest.close > sma21 else "🔻 Price BELOW SMA21"
+    price_vs_sma55 = "✅ Price ABOVE SMA55" if latest.close > sma55 else "🔻 Price BELOW SMA55"
+    
+    # Comprehensive crossover detection system
+    crossover = ""
+    
+    # Perfect Alignment Crosses (highest priority)
+    if (prev_sma8 <= prev_sma21 or prev_sma21 <= prev_sma55) and \
+       (sma8 > sma21 > sma55):
+        crossover = "⭐ Perfect Bull Alignment (8>21>55>144>233)"
+    elif (prev_sma8 >= prev_sma21 or prev_sma21 >= prev_sma55) and \
+         (sma8 < sma21 < sma55):
+        crossover = "💀 Perfect Bear Alignment (8<21<55)"
+    
+    # Major Bull Cross: 8 crosses above 21, and 21>55
+    elif (prev_sma8 <= prev_sma21 and sma8 > sma21) and (sma21 > sma55):
+        crossover = "🌟 Major Bull Cross (8↑21, Strong Trend)"
+    # Major Bear Cross: 8 crosses below 21, and 21<55
+    elif (prev_sma8 >= prev_sma21 and sma8 < sma21) and (sma21 < sma55):
+        crossover = "💀 Major Bear Cross (8↓21, Strong Trend)"
+    
+    # Standard Golden Cross: 8 crosses above 21
+    elif prev_sma8 <= prev_sma21 and sma8 > sma21:
+        crossover = "✨ Golden Cross (SMA8 ↑ SMA21)"
+    # Standard Death Cross: 8 crosses below 21
+    elif prev_sma8 >= prev_sma21 and sma8 < sma21:
+        crossover = "⚠️ Death Cross (SMA8 ↓ SMA21)"
+    
+    # Medium-term crosses
+    elif prev_sma21 <= prev_sma55 and sma21 > sma55:
+        crossover = "🚀 Bull Cross (SMA21 ↑ SMA55)"
+    elif prev_sma21 >= prev_sma55 and sma21 < sma55:
+        crossover = "💥 Bear Cross (SMA21 ↓ SMA55)"
 
+    
+    # Price crossover detection for key levels
+    price_cross = ""
+    if prev.close <= prev_sma55 and latest.close > sma55:
+        price_cross = "🚀 Price crossed ABOVE 55MA"
+    elif prev.close >= prev_sma55 and latest.close < sma55:
+        price_cross = "💥 Price crossed BELOW 55MA"
+    
     # Get MACD signal
     macd_signal = get_macd_signal(df, len(df) - 1)
-
-    # Enhanced Volume Analysis with Color
+    
+    # Weekly volume analysis (less emphasis than daily)
     spike_ratio = latest.volume / latest.vol_avg if latest.vol_avg else 0
     volume_color = get_volume_color(df, len(df) - 1)
-    
     volume_spike = ""
-    if spike_ratio > 2:
+    
+    # Higher thresholds for weekly data
+    if spike_ratio > 3:  # Much higher threshold for weekly
         if volume_color == "green":
-            volume_spike = "📊🟢 Volume Spike: 🚨 BUYING SURGE"
+            volume_spike = "📊🟢 Weekly Volume: 🚨 MAJOR BUYING"
         elif volume_color == "red":
-            volume_spike = "📊🔴 Volume Spike: 🚨 SELLING PRESSURE"
-        else:
-            volume_spike = "📊⚪️ Volume Spike: 🚨 Severe (Neutral)"
-    elif spike_ratio > 1.5:
+            volume_spike = "📊🔴 Weekly Volume: 🚨 MAJOR SELLING"
+    elif spike_ratio > 2:
         if volume_color == "green":
-            volume_spike = "📊🟢 Volume Spike: ⚠️ BUYING Interest"
+            volume_spike = "📊🟢 Weekly Volume: ⚠️ Strong Buying"
         elif volume_color == "red":
-            volume_spike = "📊🔴 Volume Spike: ⚠️ SELLING Pressure"
-        else:
-            volume_spike = "📊⚪️ Volume Spike: ⚠️ Moderate"
-    elif spike_ratio > 1.2:
-        if volume_color == "green":
-            volume_spike = "📊🟢 Volume↑ (Buying)"
-        elif volume_color == "red":
-            volume_spike = "📊🔴 Volume↑ (Selling)"
-        else:
-            volume_spike = "📊⚪️ Volume↑"
-
+            volume_spike = "📊🔴 Weekly Volume: ⚠️ Strong Selling"
+    
+    # RSI momentum (weekly requires bigger changes)
     rsi_change = latest.rsi - prev.rsi
     rsi_momentum = ""
-    if abs(rsi_change) > 5:
+    if abs(rsi_change) > 10:  # Higher threshold for weekly
         direction = "↗️ Accelerating" if rsi_change > 0 else "↘️ Decelerating"
         rsi_momentum = f"RSI {direction}"
-
+    
     # Build signal parts
-    parts = [flag, trend, price_vs_sma20, price_vs_sma50, price_vs_sma200]
+    parts = [flag, trend, price_vs_sma8, price_vs_sma21, price_vs_sma55]
+    
     if crossover:
         parts.append(crossover)
-    if sma200_cross:  # Major SMA200 crossover
-        parts.append(sma200_cross)
+    if price_cross:
+        parts.append(price_cross)
     if macd_signal:
         parts.append(macd_signal)
     if volume_spike:
         parts.append(volume_spike)
+    
     parts.append(rsi_desc)
+    
     if rsi_momentum:
         parts.append(rsi_momentum)
-
+    
+    return " | ".join(parts)
     return " | ".join(parts)
 
-# --- RSI DESCRIPTION ---
+# --- RSI DESCRIPTION (adjusted for weekly) ---
 def describe_rsi(rsi_value):
-    if rsi_value < 30:
+    # Slightly different thresholds for weekly timeframe
+    if rsi_value < 25:  # More extreme for weekly
         return "🟢 RSI OVERSOLD"
-    elif rsi_value < 40:
+    elif rsi_value < 35:
         return "🟡 RSI Near Oversold"
-    elif rsi_value <= 60:
+    elif rsi_value <= 65:
         return "⚪️ RSI Neutral"
-    elif rsi_value <= 70:
+    elif rsi_value <= 75:
         return "🟡 RSI Near Overbought"
     else:
         return "🔴 RSI OVERBOUGHT"
 
 # --- INDICATORS ---
-def add_indicators(df):
-    df['sma20'] = ta.trend.sma_indicator(df['close'], window=20)
-    df['sma50'] = ta.trend.sma_indicator(df['close'], window=50)
-    df['sma200'] = ta.trend.sma_indicator(df['close'], window=200)
-    df['rsi'] = ta.momentum.rsi(df['close'], window=14)
-    df['vol_avg'] = df['volume'].ewm(span=20, adjust=False).mean()
+def add_indicators(weekly_df):
+    """Add indicators optimized for weekly timeframe with Fibonacci SMAs"""
+    weekly_df['sma8'] = ta.trend.sma_indicator(weekly_df['close'], window=8)
+    weekly_df['sma21'] = ta.trend.sma_indicator(weekly_df['close'], window=21)
+    weekly_df['sma55'] = ta.trend.sma_indicator(weekly_df['close'], window=55)
+    weekly_df['rsi'] = ta.momentum.rsi(weekly_df['close'], window=14)
+    weekly_df['vol_avg'] = weekly_df['volume'].ewm(span=10, adjust=False).mean()  # Shorter EMA for weekly
     
-    # Add MACD
-    macd = ta.trend.MACD(df['close'])
-    df['macd'] = macd.macd()
-    df['macd_signal'] = macd.macd_signal()
-    df['macd_histogram'] = macd.macd_diff()
-
-    return df
+    # Add MACD (using weekly-appropriate parameters)
+    macd = ta.trend.MACD(weekly_df['close'], window_slow=26, window_fast=12, window_sign=9)
+    weekly_df['macd'] = macd.macd()
+    weekly_df['macd_signal'] = macd.macd_signal()
+    weekly_df['macd_histogram'] = macd.macd_diff()
+    
+    return weekly_df
 
 # --- ANALYSE ASSET ---
-def analyse_asset(symbol, df, is_crypto, prev_signals, new_signals, new_alerts):
-    df = add_indicators(df)
-    df.dropna(inplace=True)
-    if len(df) < 2:
-        logging.warning(f"{symbol}: Not enough data.")
+def analyse_asset(symbol, weekly_df, is_crypto, prev_signals, new_signals, new_alerts):
+    """Main analysis function - analyzes weekly data directly"""
+    try:
+        # Data is already weekly from the fetcher, just add indicators
+        weekly_df = add_indicators(weekly_df)
+        weekly_df.dropna(inplace=True)
+        
+        if len(weekly_df) < 2:
+            logging.warning(f"{symbol}: Not enough weekly data.")
+            return
+        
+        latest, prev = weekly_df.iloc[-1], weekly_df.iloc[-2]
+        rsi_desc = describe_rsi(latest.rsi)
+        
+        new_signal_raw = generate_signal(weekly_df, latest, prev, rsi_desc)
+        old_signal = prev_signals.get(symbol)
+        full_signal = diff_signal_parts(old_signal, new_signal_raw)
+        
+        # Always store the raw signal for next time (not the diffed one)
+        new_signals[symbol] = new_signal_raw
+        
+        output = format_output(symbol, latest, prev, full_signal, rsi_desc, is_crypto)
+        logging.info(output)
+        
+        if old_signal != new_signal_raw:
+            new_alerts.append(output)
+            
+    except Exception as e:
+        logging.error(f"Error analyzing {symbol}: {str(e)}")
         return
-
-    latest, prev = df.iloc[-1], df.iloc[-2]
-    rsi_desc = describe_rsi(latest.rsi)
-    new_signal_raw = generate_signal(df, latest, prev, rsi_desc)
-
-    old_signal = prev_signals.get(symbol)
-    full_signal = diff_signal_parts(old_signal, new_signal_raw)
-
-    # Always store the raw signal for next time (not the diffed one)
-    new_signals[symbol] = new_signal_raw
-    output = format_output(symbol, latest, prev, full_signal, rsi_desc, is_crypto)
-    logging.info(output)
-
-    if old_signal != new_signal_raw:
-        new_alerts.append(output)
