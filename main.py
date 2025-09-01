@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from alerts import send_email, send_telegram
+from alerts import send_email
 from data_feeds import fetch_crypto_data, fetch_stock_data
 from technical_analysis import analyse_asset
 
@@ -57,6 +57,5 @@ if __name__ == "__main__":
         message = "\n\n".join(new_alerts)
         subject = f"📈 Market Signal Updates ({len(new_alerts)} changes)"
         send_email(subject, message.replace("\n", "<br>"))
-        send_telegram(message)
 
     save_signals(new_signals)
