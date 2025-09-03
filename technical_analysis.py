@@ -128,7 +128,8 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     rsi_status = f"RSI:{latest.rsi:.0f}{rsi_arrow}"
 
     # Build main status line
-    status_parts = [flag, f"{above_sma8}SMA8", f"{above_sma21}SMA21", f"{above_sma55}SMA55"]
+    actual_sma_period = latest.sma_period if hasattr(latest, 'sma_period') else 55
+    status_parts = [flag, f"{above_sma8}SMA8", f"{above_sma21}SMA21", f"{above_sma55}SMA{actual_sma_period}"]
     if macd_status:
         status_parts.append(f"{macd_status}MACD")
     status_parts.append(rsi_status)
@@ -398,42 +399,92 @@ def describe_rsi(rsi_value):
 # --- INDICATORS ---
 def add_indicators(weekly_df):
     """Add indicators optimized for weekly timeframe with Fibonacci SMAs"""
-    weekly_df['sma8'] = ta.trend.sma_indicator(weekly_df['close'], window=8)
-    weekly_df['sma21'] = ta.trend.sma_indicator(weekly_df['close'], window=21)
-    weekly_df['sma55'] = ta.trend.sma_indicator(weekly_df['close'], window=55)
-    weekly_df['rsi'] = ta.momentum.rsi(weekly_df['close'], window=14)
-    weekly_df['vol_avg'] = weekly_df['volume'].ewm(span=10, adjust=False).mean()  # Shorter EMA for weekly
-    
-    # Add MACD (using weekly-appropriate parameters)
-    macd = ta.trend.MACD(weekly_df['close'], window_slow=26, window_fast=12, window_sign=9)
-    weekly_df['macd'] = macd.macd()
-    weekly_df['macd_signal'] = macd.macd_signal()
-    weekly_df['macd_histogram'] = macd.macd_diff()
-    
-    return weekly_df
+    try:
+        # Ensure we have enough data for each indicator
+        if len(weekly_df) < 8:
+            logging.warning(f"Insufficient data for SMA8: {len(weekly_df)} weeks")
+            return weekly_df
+            
+        weekly_df['sma8'] = ta.trend.sma_indicator(weekly_df['close'], window=8)
+        
+        if len(weekly_df) >= 21:
+            weekly_df['sma21'] = ta.trend.sma_indicator(weekly_df['close'], window=21)
+        else:
+            weekly_df['sma21'] = ta.trend.sma_indicator(weekly_df['close'], window=min(len(weekly_df)-1, 14))
+            
+        # Handle SMA55 with fallback
+        if len(weekly_df) >= 55:
+            weekly_df['sma55'] = ta.trend.sma_indicator(weekly_df['close'], window=55)
+            weekly_df['sma_period'] = 55
+        else:
+            fallback_period = min(34, len(weekly_df)-1)
+            weekly_df['sma55'] = ta.trend.sma_indicator(weekly_df['close'], window=fallback_period)
+            weekly_df['sma_period'] = fallback_period
+            
+        # RSI - needs at least 15 periods
+        if len(weekly_df) >= 15:
+            weekly_df['rsi'] = ta.momentum.rsi(weekly_df['close'], window=14)
+        else:
+            # Use shorter RSI window for limited data
+            weekly_df['rsi'] = ta.momentum.rsi(weekly_df['close'], window=min(len(weekly_df)-1, 7))
+            
+        weekly_df['vol_avg'] = weekly_df['volume'].ewm(span=min(10, len(weekly_df)), adjust=False).mean()
+        
+        # MACD - needs at least 35 periods ideally
+        if len(weekly_df) >= 35:
+            macd = ta.trend.MACD(weekly_df['close'], window_slow=26, window_fast=12, window_sign=9)
+            weekly_df['macd'] = macd.macd()
+            weekly_df['macd_signal'] = macd.macd_signal()
+            weekly_df['macd_histogram'] = macd.macd_diff()
+        else:
+            # Simplified MACD for limited data
+            macd = ta.trend.MACD(weekly_df['close'], window_slow=20, window_fast=8, window_sign=6)
+            weekly_df['macd'] = macd.macd()
+            weekly_df['macd_signal'] = macd.macd_signal()
+            weekly_df['macd_histogram'] = macd.macd_diff()
+            
+        return weekly_df
+        
+    except Exception as e:
+        logging.error(f"Error adding indicators: {e}")
+        return weekly_df
 
 # --- ANALYSE ASSET ---
 def analyse_asset(symbol, weekly_df, is_crypto, prev_signals, new_signals, new_alerts):
     """Main analysis function - analyzes weekly data directly"""
     try:
-        # Data is already weekly from the fetcher, just add indicators
+        # Add indicators first
         weekly_df = add_indicators(weekly_df)
-        weekly_df.dropna(inplace=True)
+        
+        # Check we have enough data BEFORE dropping NaN values
+        if len(weekly_df) < 55:
+            logging.info(f"{symbol}: Limited data ({len(weekly_df)} weeks), using shorter timeframe analysis")
+        
+        # More selective dropna - only drop rows where essential indicators are missing
+        essential_cols = ['close', 'sma8', 'sma21', 'rsi']
+        weekly_df = weekly_df.dropna(subset=essential_cols)
         
         if len(weekly_df) < 2:
-            logging.warning(f"{symbol}: Not enough weekly data.")
+            logging.warning(f"{symbol}: Not enough data after cleaning ({len(weekly_df)} weeks).")
             return
+            
+        # Debug: Check what columns we actually have
+        logging.debug(f"{symbol}: Available columns: {weekly_df.columns.tolist()}")
         
         latest, prev = weekly_df.iloc[-1], weekly_df.iloc[-2]
-        rsi_desc = describe_rsi(latest.rsi)
         
+        # Debug: Check if RSI exists
+        if not hasattr(latest, 'rsi') or pd.isna(latest.rsi):
+            logging.error(f"{symbol}: RSI not available. Latest row data: {latest.index.tolist()}")
+            return
+            
+        rsi_desc = describe_rsi(latest.rsi)
         new_signal_raw = generate_signal(weekly_df, latest, prev, rsi_desc)
+        
         old_signal = prev_signals.get(symbol)
         full_signal = diff_signal_parts(old_signal, new_signal_raw)
         
-        # Always store the raw signal for next time (not the diffed one)
         new_signals[symbol] = new_signal_raw
-        
         output = format_output(symbol, latest, prev, full_signal, rsi_desc, is_crypto)
         logging.info(output)
         
@@ -442,4 +493,6 @@ def analyse_asset(symbol, weekly_df, is_crypto, prev_signals, new_signals, new_a
             
     except Exception as e:
         logging.error(f"Error analyzing {symbol}: {str(e)}")
+        import traceback
+        logging.debug(f"Full traceback for {symbol}: {traceback.format_exc()}")
         return
