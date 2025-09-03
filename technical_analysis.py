@@ -432,7 +432,7 @@ def add_indicators(weekly_df):
         
         # MACD - needs at least 35 periods ideally
         if len(weekly_df) >= 35:
-            macd = ta.trend.MACD(weekly_df['close'], window_slow=26, window_fast=12, window_sign=9)
+            macd = ta.trend.MACD(weekly_df['close'], window_slow=52, window_fast=26, window_sign=18)
             weekly_df['macd'] = macd.macd()
             weekly_df['macd_signal'] = macd.macd_signal()
             weekly_df['macd_histogram'] = macd.macd_diff()
