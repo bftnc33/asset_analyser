@@ -2,7 +2,6 @@
 import logging
 import os
 import smtplib
-import requests
 from email.message import EmailMessage
 from email.utils import formatdate
 from dotenv import load_dotenv
