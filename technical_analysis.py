@@ -90,6 +90,15 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     above_sma21 = "✅" if any(part == "✅ Price ABOVE SMA21" for part in current_parts) else "🔻"
     above_sma55 = "✅" if any(part == "✅ Price ABOVE SMA55" for part in current_parts) else "🔻"
 
+    # Add SMA144 and SMA233 status
+    above_sma144 = ""
+    if any("ABOVE SMA144" in part or "BELOW SMA144" in part for part in current_parts):
+        above_sma144 = "✅" if any(part == "✅ Price ABOVE SMA144" for part in current_parts) else "🔻"
+
+    above_sma233 = ""
+    if any("ABOVE SMA233" in part or "BELOW SMA233" in part for part in current_parts):
+        above_sma233 = "✅" if any(part == "✅ Price ABOVE SMA233" for part in current_parts) else "🔻"
+
     # Add MACD status
     macd_status = ""
     for part in current_parts:
@@ -130,6 +139,12 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
     # Build main status line
     actual_sma_period = latest.sma_period if hasattr(latest, 'sma_period') else 55
     status_parts = [flag, f"{above_sma8}SMA8", f"{above_sma21}SMA21", f"{above_sma55}SMA{actual_sma_period}"]
+
+    if above_sma144:
+        status_parts.append(f"{above_sma144}SMA144")
+    if above_sma233:
+        status_parts.append(f"{above_sma233}SMA233")
+
     if macd_status:
         status_parts.append(f"{macd_status}MACD")
     status_parts.append(rsi_status)
@@ -292,41 +307,40 @@ def generate_signal(df, latest, prev, rsi_desc):
         flag = "⚪️ Mixed Signals"
     
     trend = "🔼 Weekly UP" if latest.close > prev.close else "🔽 Weekly DOWN"
+    
     price_vs_sma8 = "✅ Price ABOVE SMA8" if latest.close > sma8 else "🔻 Price BELOW SMA8"
     price_vs_sma21 = "✅ Price ABOVE SMA21" if latest.close > sma21 else "🔻 Price BELOW SMA21"
     price_vs_sma55 = "✅ Price ABOVE SMA55" if latest.close > sma55 else "🔻 Price BELOW SMA55"
     
-    # Comprehensive crossover detection system
-    crossover = ""
+    # Add SMA144 and SMA233 price relationships (only if data exists)
+    price_vs_sma144 = ""
+    if hasattr(latest, 'sma144') and latest.sma144 is not None and pd.notna(latest.sma144):
+        price_vs_sma144 = "✅ Price ABOVE SMA144" if latest.close > latest.sma144 else "🔻 Price BELOW SMA144"
     
-    # Perfect Alignment Crosses (highest priority)
+    price_vs_sma233 = ""
+    if hasattr(latest, 'sma233') and latest.sma233 is not None and pd.notna(latest.sma233):
+        price_vs_sma233 = "✅ Price ABOVE SMA233" if latest.close > latest.sma233 else "🔻 Price BELOW SMA233"
+    
+    # Comprehensive crossover detection system (keeping your existing logic)
+    crossover = ""
     if (prev_sma8 <= prev_sma21 or prev_sma21 <= prev_sma55) and \
        (sma8 > sma21 > sma55):
         crossover = "⭐ Perfect Bull Alignment (8>21>55>144>233)"
     elif (prev_sma8 >= prev_sma21 or prev_sma21 >= prev_sma55) and \
          (sma8 < sma21 < sma55):
         crossover = "💀 Perfect Bear Alignment (8<21<55)"
-    
-    # Major Bull Cross: 8 crosses above 21, and 21>55
     elif (prev_sma8 <= prev_sma21 and sma8 > sma21) and (sma21 > sma55):
         crossover = "🌟 Major Bull Cross (8↑21, Strong Trend)"
-    # Major Bear Cross: 8 crosses below 21, and 21<55
     elif (prev_sma8 >= prev_sma21 and sma8 < sma21) and (sma21 < sma55):
         crossover = "💀 Major Bear Cross (8↓21, Strong Trend)"
-    
-    # Standard Golden Cross: 8 crosses above 21
     elif prev_sma8 <= prev_sma21 and sma8 > sma21:
         crossover = "✨ Golden Cross (SMA8 ↑ SMA21)"
-    # Standard Death Cross: 8 crosses below 21
     elif prev_sma8 >= prev_sma21 and sma8 < sma21:
         crossover = "⚠️ Death Cross (SMA8 ↓ SMA21)"
-    
-    # Medium-term crosses
     elif prev_sma21 <= prev_sma55 and sma21 > sma55:
         crossover = "🚀 Bull Cross (SMA21 ↑ SMA55)"
     elif prev_sma21 >= prev_sma55 and sma21 < sma55:
         crossover = "💥 Bear Cross (SMA21 ↓ SMA55)"
-
     
     # Price crossover detection for key levels
     price_cross = ""
@@ -338,13 +352,12 @@ def generate_signal(df, latest, prev, rsi_desc):
     # Get MACD signal
     macd_signal = get_macd_signal(df, len(df) - 1)
     
-    # Weekly volume analysis (less emphasis than daily)
+    # Weekly volume analysis
     spike_ratio = latest.volume / latest.vol_avg if latest.vol_avg else 0
     volume_color = get_volume_color(df, len(df) - 1)
     volume_spike = ""
     
-    # Higher thresholds for weekly data
-    if spike_ratio > 3:  # Much higher threshold for weekly
+    if spike_ratio > 3:
         if volume_color == "green":
             volume_spike = "📊🟢 Weekly Volume: 🚨 MAJOR BUYING"
         elif volume_color == "red":
@@ -355,16 +368,22 @@ def generate_signal(df, latest, prev, rsi_desc):
         elif volume_color == "red":
             volume_spike = "📊🔴 Weekly Volume: ⚠️ Strong Selling"
     
-    # RSI momentum (weekly requires bigger changes)
+    # RSI momentum
     rsi_change = latest.rsi - prev.rsi
     rsi_momentum = ""
-    if abs(rsi_change) > 10:  # Higher threshold for weekly
+    if abs(rsi_change) > 10:
         direction = "↗️ Accelerating" if rsi_change > 0 else "↘️ Decelerating"
         rsi_momentum = f"RSI {direction}"
     
     # Build signal parts
     parts = [flag, trend, price_vs_sma8, price_vs_sma21, price_vs_sma55]
     
+    # Add SMA144 and SMA233 if they exist
+    if price_vs_sma144:
+        parts.append(price_vs_sma144)
+    if price_vs_sma233:
+        parts.append(price_vs_sma233)
+        
     if crossover:
         parts.append(crossover)
     if price_cross:
@@ -373,13 +392,10 @@ def generate_signal(df, latest, prev, rsi_desc):
         parts.append(macd_signal)
     if volume_spike:
         parts.append(volume_spike)
-    
     parts.append(rsi_desc)
-    
     if rsi_momentum:
         parts.append(rsi_momentum)
     
-    return " | ".join(parts)
     return " | ".join(parts)
 
 # --- RSI DESCRIPTION (adjusted for weekly) ---
@@ -421,6 +437,18 @@ def add_indicators(weekly_df):
             weekly_df['sma55'] = ta.trend.sma_indicator(weekly_df['close'], window=fallback_period)
             weekly_df['sma_period'] = fallback_period
             
+        # Add SMA144 (only if enough data)
+        if len(weekly_df) >= 144:
+            weekly_df['sma144'] = ta.trend.sma_indicator(weekly_df['close'], window=144)
+        else:
+            weekly_df['sma144'] = None  # Explicitly set to None if not enough data
+            
+        # Add SMA233 (only if enough data) 
+        if len(weekly_df) >= 233:
+            weekly_df['sma233'] = ta.trend.sma_indicator(weekly_df['close'], window=233)
+        else:
+            weekly_df['sma233'] = None  # Explicitly set to None if not enough data
+            
         # RSI - needs at least 15 periods
         if len(weekly_df) >= 15:
             weekly_df['rsi'] = ta.momentum.rsi(weekly_df['close'], window=14)
@@ -448,7 +476,7 @@ def add_indicators(weekly_df):
     except Exception as e:
         logging.error(f"Error adding indicators: {e}")
         return weekly_df
-
+    
 # --- ANALYSE ASSET ---
 def analyse_asset(symbol, weekly_df, is_crypto, prev_signals, new_signals, new_alerts):
     """Main analysis function - analyzes weekly data directly"""
