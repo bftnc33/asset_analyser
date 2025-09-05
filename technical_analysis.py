@@ -153,6 +153,7 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
 
     # Extract key changes for second line
     key_changes = []
+    actual_sma_period = latest.sma_period if hasattr(latest, 'sma_period') else 55
     for part in signal_parts:
         part = part.strip()
         if "(was:" in part:
@@ -165,8 +166,8 @@ def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes
                 key_changes.append("✅ Broke ABOVE SMA21")
             elif "BELOW SMA21" in part and "was: ✅ Price ABOVE SMA21" in part:
                 key_changes.append("🔻 Broke BELOW SMA21")
-            elif "ABOVE SMA55" in part and "was: 🔻 Price BELOW SMA55" in part:
-                key_changes.append("✅ Broke ABOVE SMA55")
+            elif f"ABOVE SMA{actual_sma_period}" in part and f"was: 🔻 Price BELOW SMA{actual_sma_period}" in part:
+                key_changes.append(f"✅ Broke ABOVE SMA{actual_sma_period}")
             elif "BELOW SMA55" in part and "was: ✅ Price ABOVE SMA55" in part:
                 key_changes.append("🔻 Broke BELOW SMA55")
             elif "Bull Flag" in part and "was: 📉 Bear Flag" in part:
