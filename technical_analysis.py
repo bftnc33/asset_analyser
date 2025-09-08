@@ -41,196 +41,320 @@ def diff_signal_parts(old_signal, new_signal):
 
 # --- FORMAT OUTPUT ---
 def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes=None):
-    # Determine currency and formatting
+    """Return structured data for HTML table instead of formatted string"""
+    
+    # Determine currency and formatting (same logic as original)
     if symbol.endswith("SGLN.L"):
         currency = "£"
-        suffix = ""
-        # Convert pence to pounds by dividing by 100
         current_close = latest.close / 100
         previous_close = previous.close / 100
         price_fmt = "{:,.4f}" if current_close < 1 else "{:,.2f}"
     elif symbol.endswith(".L"):
         currency = "£"
-        suffix = ""
         price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
         current_close = latest.close
         previous_close = previous.close
     elif is_crypto:
-        # Crypto in GBP
         currency = "£"
-        suffix = ""
         price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
         current_close = latest.close
         previous_close = previous.close
     else:
-        # US stocks in USD
         currency = "$"
-        suffix = ""
         price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
         current_close = latest.close
         previous_close = previous.close
-
+    
     price_change = ((current_close - previous_close) / previous_close) * 100
     change_color = "🟢" if price_change > 0 else "🔴" if price_change < 0 else "⚪️"
-
-    # Parse the signal to build current status
+    
+    # Parse signal parts
     signal_parts = signal.split(' | ')
-
-    # Extract only the current status (before any "was:" text)
+    
     def extract_current_status(part):
-        """Extract the current status from a signal part, ignoring (was: ...) sections"""
         if "(was:" in part:
             return part.split("(was:")[0].strip()
         return part.strip()
-
-    # Build compact status line using only current status
+    
     current_parts = [extract_current_status(part) for part in signal_parts]
-    flag = "📈 Bull" if any("Bull Flag" in part for part in current_parts) else "📉 Bear"
-    above_sma8 = "✅" if any(part == "✅ Price ABOVE SMA8" for part in current_parts) else "🔻"
-    above_sma21 = "✅" if any(part == "✅ Price ABOVE SMA21" for part in current_parts) else "🔻"
-    above_sma55 = "✅" if any(part == "✅ Price ABOVE SMA55" for part in current_parts) else "🔻"
-
-    # Add SMA144 and SMA233 status
-    above_sma144 = ""
+    
+    # Extract individual components
+    flag = "📈" if any("Bull Flag" in part for part in current_parts) else "📉"
+    flag_text = "Bull" if flag == "📈" else "Bear"
+    
+    # SMA status
+    sma8_status = "✅" if any(part == "✅ Price ABOVE SMA8" for part in current_parts) else "🔻"
+    sma21_status = "✅" if any(part == "✅ Price ABOVE SMA21" for part in current_parts) else "🔻"
+    sma55_status = "✅" if any(part == "✅ Price ABOVE SMA55" for part in current_parts) else "🔻"
+    
+    # SMA144 and SMA233 status
+    sma144_status = ""
     if any("ABOVE SMA144" in part or "BELOW SMA144" in part for part in current_parts):
-        above_sma144 = "✅" if any(part == "✅ Price ABOVE SMA144" for part in current_parts) else "🔻"
-
-    above_sma233 = ""
+        sma144_status = "✅" if any(part == "✅ Price ABOVE SMA144" for part in current_parts) else "🔻"
+    
+    sma233_status = ""
     if any("ABOVE SMA233" in part or "BELOW SMA233" in part for part in current_parts):
-        above_sma233 = "✅" if any(part == "✅ Price ABOVE SMA233" for part in current_parts) else "🔻"
-
-    # Add MACD status
+        sma233_status = "✅" if any(part == "✅ Price ABOVE SMA233" for part in current_parts) else "🔻"
+    
+    # MACD status
     macd_status = ""
+    macd_emoji = ""
     for part in current_parts:
         if "🚀 MACD Bullish Cross" in part:
-            macd_status = "🚀"
+            macd_emoji = "🚀"
+            macd_status = "Bull Cross"
             break
         elif "⚠️ MACD Bearish Cross" in part:
-            macd_status = "⚠️"
+            macd_emoji = "⚠️"
+            macd_status = "Bear Cross"
             break
         elif "🔥 MACD Strong Bull" in part:
-            macd_status = "🔥"
+            macd_emoji = "🔥"
+            macd_status = "Strong Bull"
             break
         elif "🔻 MACD Strong Bear" in part:
-            macd_status = "🔻"
+            macd_emoji = "🔻"
+            macd_status = "Strong Bear"
             break
         elif "✅⬆️ MACD" in part:
-            macd_status = "✅⬆️"
+            macd_emoji = "✅⬆️"
+            macd_status = "Bullish"
             break
         elif "✅⬇️ MACD" in part:
-            macd_status = "✅⬇️"
+            macd_emoji = "✅⬇️"
+            macd_status = "Bull Weak"
             break
         elif "🔻⬆️ MACD" in part:
-            macd_status = "🔻⬆️"
+            macd_emoji = "🔻⬆️"
+            macd_status = "Bear Weak"
             break
         elif "🔻⬇️ MACD" in part:
-            macd_status = "🔻⬇️"
+            macd_emoji = "🔻⬇️"
+            macd_status = "Bearish"
             break
-
-    # RSI with momentum arrow if accelerating
-    rsi_arrow = ""
-    if any("RSI ↗️ Accelerating" in part for part in current_parts):
-        rsi_arrow = "↗️"
-    elif any("RSI ↘️ Decelerating" in part for part in current_parts):
-        rsi_arrow = "↘️"
-
-    rsi_status = f"RSI:{latest.rsi:.0f}{rsi_arrow}"
-
-    # Build main status line
+    
+    # RSI
+    rsi_value = latest.rsi
+    
+    # Get SMA period for display
     actual_sma_period = latest.sma_period if hasattr(latest, 'sma_period') else 55
-    status_parts = [flag, f"{above_sma8}SMA8", f"{above_sma21}SMA21", f"{above_sma55}SMA{actual_sma_period}"]
-
-    if above_sma144:
-        status_parts.append(f"{above_sma144}SMA144")
-    if above_sma233:
-        status_parts.append(f"{above_sma233}SMA233")
-
-    if macd_status:
-        status_parts.append(f"{macd_status}MACD")
-    status_parts.append(rsi_status)
-
-    main_line = f"{symbol}: {currency}{price_fmt.format(current_close)}{suffix} {change_color}{price_change:+.1f}% | {' | '.join(status_parts)}"
-
-    # Extract key changes for second line
-    key_changes = []
-    actual_sma_period = latest.sma_period if hasattr(latest, 'sma_period') else 55
+    
+    # Extract notes/changes from signal
+    notes = []
     for part in signal_parts:
         part = part.strip()
         if "(was:" in part:
-            # Extract the change
             if "ABOVE SMA8" in part and "was: 🔻 Price BELOW SMA8" in part:
-                key_changes.append("✅ Broke ABOVE SMA8")
+                notes.append("✅ Broke ABOVE SMA8")
             elif "BELOW SMA8" in part and "was: ✅ Price ABOVE SMA8" in part:
-                key_changes.append("🔻 Broke BELOW SMA8")
+                notes.append("🔻 Broke BELOW SMA8")
             elif "ABOVE SMA21" in part and "was: 🔻 Price BELOW SMA21" in part:
-                key_changes.append("✅ Broke ABOVE SMA21")
+                notes.append("✅ Broke ABOVE SMA21")
             elif "BELOW SMA21" in part and "was: ✅ Price ABOVE SMA21" in part:
-                key_changes.append("🔻 Broke BELOW SMA21")
+                notes.append("🔻 Broke BELOW SMA21")
             elif f"ABOVE SMA{actual_sma_period}" in part and f"was: 🔻 Price BELOW SMA{actual_sma_period}" in part:
-                key_changes.append(f"✅ Broke ABOVE SMA{actual_sma_period}")
-            elif "BELOW SMA55" in part and "was: ✅ Price ABOVE SMA55" in part:
-                key_changes.append("🔻 Broke BELOW SMA55")
+                notes.append(f"✅ Broke ABOVE SMA{actual_sma_period}")
             elif "Bull Flag" in part and "was: 📉 Bear Flag" in part:
-                key_changes.append("📈 Turned BULLISH")
+                notes.append("📈 Turned BULLISH")
             elif "Bear Flag" in part and "was: 📈 Bull Flag" in part:
-                key_changes.append("📉 Turned BEARISH")
+                notes.append("📉 Turned BEARISH")
             elif "Weekly UP" in part and "was: 🔽 Weekly DOWN" in part:
-                key_changes.append("🔼 Weekly UP")
+                notes.append("🔼 Weekly UP")
             elif "Weekly DOWN" in part and "was: 🔼 Weekly UP" in part:
-                key_changes.append("🔽 Weekly DOWN")
-            elif "Golden Cross" in part:
-                key_changes.append("✨ Golden Cross")
-            elif "Death Cross" in part:
-                key_changes.append("⚠️ Death Cross")
-            elif "Major Bull Cross" in part:
-                key_changes.append("🌟 Major Bull Cross (10>21>50)")
-            elif "Major Bear Cross" in part:
-                key_changes.append("💀 Major Bear Cross (10<21<50)")
+                notes.append("🔽 Weekly DOWN")
             elif "MACD Bullish Cross" in part:
-                key_changes.append("🚀 MACD Bull Cross")
+                notes.append("🚀 MACD Bull Cross")
             elif "MACD Bearish Cross" in part:
-                key_changes.append("⚠️ MACD Bear Cross")
-            elif "RSI" in part:
-                # Handle RSI changes
-                if "OVERSOLD" in part:
-                    key_changes.append(f"🟢 RSI OVERSOLD ({latest.rsi:.0f})")
-                elif "OVERBOUGHT" in part:
-                    key_changes.append(f"🔴 RSI OVERBOUGHT ({latest.rsi:.0f})")
-                elif "Near Overbought" in part:
-                    key_changes.append(f"🟡 RSI heating up ({latest.rsi:.0f}→overbought)")
-                elif "Near Oversold" in part:
-                    key_changes.append(f"🟡 RSI cooling ({latest.rsi:.0f}→oversold)")
+                notes.append("⚠️ MACD Bear Cross")
+    
+    # Add RSI conditions
+    if "🟢 RSI OVERSOLD" in rsi_desc:
+        notes.append(f"🟢 RSI OVERSOLD ({rsi_value:.0f})")
+    elif "🔴 RSI OVERBOUGHT" in rsi_desc:
+        notes.append(f"🔴 RSI OVERBOUGHT ({rsi_value:.0f})")
+    elif "🟡 RSI Near Overbought" in rsi_desc:
+        notes.append(f"🟡 RSI heating up ({rsi_value:.0f}→overbought)")
+    elif "🟡 RSI Near Oversold" in rsi_desc:
+        notes.append(f"🟡 RSI cooling ({rsi_value:.0f}→oversold)")
+    
+    return {
+        'symbol': symbol,
+        'price': f"{currency}{price_fmt.format(current_close)}",
+        'change': f"{change_color}{price_change:+.1f}%",
+        'flag': flag,
+        'flag_text': flag_text,
+        'sma8': sma8_status,
+        'sma21': sma21_status,
+        'sma55': sma55_status,
+        'sma55_period': actual_sma_period,
+        'sma144': sma144_status,
+        'sma233': sma233_status,
+        'macd_emoji': macd_emoji,
+        'macd_status': macd_status,
+        'rsi': f"{rsi_value:.0f}",
+        'notes': ' | '.join(notes) if notes else ''
+    }
 
-    # Enhanced MACD change detection
-    for part in current_parts:
-        # Skip if we already have a MACD change message
-        if any("MACD" in change for change in key_changes):
-            continue
-        if "🚀 MACD Bullish Cross" in part and not any("MACD" in change for change in key_changes):
-            key_changes.append("🚀 MACD Bull Cross")
-        elif "⚠️ MACD Bearish Cross" in part and not any("MACD" in change for change in key_changes):
-            key_changes.append("⚠️ MACD Bear Cross")
-        elif "🔥 MACD Strong Bull" in part:
-            key_changes.append("🔥 MACD Strong Bull")
-        elif "🔻 MACD Strong Bear" in part:
-            key_changes.append("🔻 MACD Strong Bear")
-
-    # Add current RSI conditions if extreme
-    if "🟢 RSI OVERSOLD" in rsi_desc and not any("RSI" in change for change in key_changes):
-        key_changes.append(f"🟢 RSI OVERSOLD ({latest.rsi:.0f})")
-    elif "🔴 RSI OVERBOUGHT" in rsi_desc and not any("RSI" in change for change in key_changes):
-        key_changes.append(f"🔴 RSI OVERBOUGHT ({latest.rsi:.0f})")
-    elif "🟡 RSI Near Overbought" in rsi_desc and not any("RSI" in change for change in key_changes):
-        key_changes.append(f"🟡 RSI heating up ({latest.rsi:.0f}→overbought)")
-    elif "🟡 RSI Near Oversold" in rsi_desc and not any("RSI" in change for change in key_changes):
-        key_changes.append(f"🟡 RSI cooling ({latest.rsi:.0f}→oversold)")
-
-    # Return format: always show status line, add changes if any
-    if key_changes:
-        changes_line = f"   {' | '.join(key_changes)}"
-        return f"{main_line}\n{changes_line}"
-    else:
-        return main_line
+def generate_html_table(analysis_results):
+    """Generate HTML table from analysis results"""
+    
+    html = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Weekly Trading Analysis</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', Arial, sans-serif;
+                margin: 20px;
+                background-color: #f5f5f5;
+            }
+            .container {
+                max-width: 1400px;
+                margin: 0 auto;
+                background-color: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            h1 {
+                color: #333;
+                text-align: center;
+                margin-bottom: 30px;
+                border-bottom: 3px solid #4CAF50;
+                padding-bottom: 10px;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+                font-size: 14px;
+            }
+            th {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 12px 8px;
+                text-align: center;
+                font-weight: 600;
+                border: 1px solid #ddd;
+                position: sticky;
+                top: 0;
+                z-index: 10;
+            }
+            td {
+                padding: 10px 8px;
+                text-align: center;
+                border: 1px solid #ddd;
+                vertical-align: middle;
+            }
+            tr:nth-child(even) {
+                background-color: #f8f9fa;
+            }
+            tr:hover {
+                background-color: #e3f2fd;
+                transition: background-color 0.2s;
+            }
+            .symbol {
+                font-weight: bold;
+                color: #2c3e50;
+                text-align: left;
+            }
+            .price {
+                font-weight: bold;
+                font-size: 16px;
+            }
+            .change {
+                font-weight: bold;
+                font-size: 15px;
+            }
+            .flag {
+                font-size: 18px;
+            }
+            .sma {
+                font-size: 16px;
+            }
+            .macd {
+                font-weight: bold;
+            }
+            .rsi {
+                font-weight: bold;
+                color: #34495e;
+            }
+            .notes {
+                text-align: left;
+                font-size: 13px;
+                color: #555;
+                max-width: 200px;
+                word-wrap: break-word;
+            }
+            .timestamp {
+                text-align: center;
+                color: #666;
+                font-style: italic;
+                margin-top: 20px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>📊 Weekly Trading Analysis</h1>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Price</th>
+                        <th>Change</th>
+                        <th>Flag</th>
+                        <th>SMA8</th>
+                        <th>SMA21</th>
+                        <th>SMA55</th>
+                        <th>SMA144</th>
+                        <th>SMA233</th>
+                        <th>MACD</th>
+                        <th>RSI</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+    '''
+    
+    for result in analysis_results:
+        # Handle SMA55 period display
+        sma55_header = f"SMA{result['sma55_period']}" if result['sma55_period'] != 55 else "SMA55"
+        
+        html += f'''
+                    <tr>
+                        <td class="symbol">{result['symbol']}</td>
+                        <td class="price">{result['price']}</td>
+                        <td class="change">{result['change']}</td>
+                        <td class="flag">{result['flag']}</td>
+                        <td class="sma">{result['sma8']}</td>
+                        <td class="sma">{result['sma21']}</td>
+                        <td class="sma">{result['sma55']}</td>
+                        <td class="sma">{result['sma144'] if result['sma144'] else '-'}</td>
+                        <td class="sma">{result['sma233'] if result['sma233'] else '-'}</td>
+                        <td class="macd">{result['macd_emoji']} {result['macd_status']}</td>
+                        <td class="rsi">{result['rsi']}</td>
+                        <td class="notes">{result['notes']}</td>
+                    </tr>
+        '''
+    
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    html += f'''
+                </tbody>
+            </table>
+            <div class="timestamp">
+                Generated: {timestamp}
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
+    
+    return html
 
 # --- VOLUME COLOR DETECTION ---
 def get_volume_color(df, latest_idx):
@@ -479,47 +603,48 @@ def add_indicators(weekly_df):
         return weekly_df
     
 # --- ANALYSE ASSET ---
-def analyse_asset(symbol, weekly_df, is_crypto, prev_signals, new_signals, new_alerts):
-    """Main analysis function - analyzes weekly data directly"""
+def analyse_asset(symbol, weekly_df, is_crypto, prev_signals, new_signals, new_alerts, html_results=None):
+    """Main analysis function - analyzes weekly data and collects both text alerts and HTML data"""
     try:
         # Add indicators first
         weekly_df = add_indicators(weekly_df)
         
-        # Check we have enough data BEFORE dropping NaN values
         if len(weekly_df) < 55:
             logging.info(f"{symbol}: Limited data ({len(weekly_df)} weeks), using shorter timeframe analysis")
         
-        # More selective dropna - only drop rows where essential indicators are missing
         essential_cols = ['close', 'sma8', 'sma21', 'rsi']
         weekly_df = weekly_df.dropna(subset=essential_cols)
         
         if len(weekly_df) < 2:
             logging.warning(f"{symbol}: Not enough data after cleaning ({len(weekly_df)} weeks).")
             return
-            
-        # Debug: Check what columns we actually have
-        logging.debug(f"{symbol}: Available columns: {weekly_df.columns.tolist()}")
         
         latest, prev = weekly_df.iloc[-1], weekly_df.iloc[-2]
         
-        # Debug: Check if RSI exists
         if not hasattr(latest, 'rsi') or pd.isna(latest.rsi):
-            logging.error(f"{symbol}: RSI not available. Latest row data: {latest.index.tolist()}")
+            logging.error(f"{symbol}: RSI not available.")
             return
-            
+        
         rsi_desc = describe_rsi(latest.rsi)
         new_signal_raw = generate_signal(weekly_df, latest, prev, rsi_desc)
         
         old_signal = prev_signals.get(symbol)
         full_signal = diff_signal_parts(old_signal, new_signal_raw)
-        
         new_signals[symbol] = new_signal_raw
+        
+        # Generate text output for console logging
         output = format_output(symbol, latest, prev, full_signal, rsi_desc, is_crypto)
         logging.info(output)
         
+        # Add to alerts if signal changed
         if old_signal != new_signal_raw:
             new_alerts.append(output)
-            
+        
+        # Collect HTML data if html_results list is provided
+        if html_results is not None:
+            html_data = format_output(symbol, latest, prev, full_signal, rsi_desc, is_crypto)
+            html_results.append(html_data)
+        
     except Exception as e:
         logging.error(f"Error analyzing {symbol}: {str(e)}")
         import traceback
