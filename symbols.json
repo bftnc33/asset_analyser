@@ -1,4 +1,4 @@
 {
-  "stocks": ["MSTR", "VUAG.L", "COFF.L", "SGLN.L"],
+  "stocks": ["MSTR", "VUAG.L", "COFF.L", "SGLN.L", "SSLN.L"],
   "crypto": ["BTC/GBP", "ETH/GBP", "XRP/GBP", "SOL/GBP", "DOGE/GBP", "ADA/GBP", "XLM/GBP", "SUI/GBP", "LINK/GBP"]
 }
