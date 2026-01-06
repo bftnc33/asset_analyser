@@ -42,7 +42,7 @@ def diff_signal_parts(old_signal, new_signal):
 # --- FORMAT OUTPUT ---
 def format_output(symbol, latest, previous, signal, rsi_desc, is_crypto, changes=None):
     # Determine currency and formatting
-    if symbol.endswith("SGLN.L"):
+    if symbol.endswith(("SGLN.L","SSLN.L")):
         currency = "£"
         suffix = ""
         # Convert pence to pounds by dividing by 100
