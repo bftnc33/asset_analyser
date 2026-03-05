@@ -1,4 +1,4 @@
-ccxt
+ccxt==4.3.89
 pandas
 ta
 matplotlib
