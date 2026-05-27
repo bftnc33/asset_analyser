@@ -10,8 +10,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 # --- CONFIG ---
 SIGNAL_FILE = "signals.json"
-timeframe = '1d'  # Daily timeframe
-limit = 500  # 500 days for SMA233 coverage
 
 # --- LOAD SYMBOLS ---
 def load_symbols(file_path="symbols.json"):
