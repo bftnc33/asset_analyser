@@ -31,7 +31,7 @@ def diff_signal_parts(old_signal, new_signal):
                (('ABOVE SMA8' in new_item or 'BELOW SMA8' in new_item) and ('ABOVE SMA8' in old_item or 'BELOW SMA8' in old_item)) or \
                (('ABOVE SMA21' in new_item or 'BELOW SMA21' in new_item) and ('ABOVE SMA21' in old_item or 'BELOW SMA21' in old_item)) or \
                (('ABOVE SMA55' in new_item or 'BELOW SMA55' in new_item) and ('ABOVE SMA55' in old_item or 'BELOW SMA55' in old_item)) or \
-               (('MACD' in new_item and 'MACD' in old_item)):
+               ('MACD' in new_item and 'MACD' in old_item):
                 enhanced_part = f"{new_item} (was: {old_item})"
                 break
         enhanced_signal_parts.append(enhanced_part)
@@ -108,8 +108,7 @@ def format_output(symbol, latest, previous, signal, is_crypto):
     rsi_status = f"RSI:{latest.rsi:.0f}{rsi_arrow}"
 
     # Build main status line
-    actual_sma_period = latest.sma_period if hasattr(latest, 'sma_period') else 55
-    status_parts = [flag, f"{above_sma8}SMA8", f"{above_sma21}SMA21", f"{above_sma55}SMA{actual_sma_period}"]
+    status_parts = [flag, f"{above_sma8}SMA8", f"{above_sma21}SMA21", f"{above_sma55}SMA55"]
     status_parts.append(rsi_status)
 
     main_line = f"{symbol}: {currency}{price_fmt.format(current_close)}{suffix} {change_color}{price_change:+.1f}% | {' | '.join(status_parts)}"
@@ -129,8 +128,8 @@ def format_output(symbol, latest, previous, signal, is_crypto):
                 key_changes.append("✅ Broke ABOVE SMA21")
             elif "BELOW SMA21" in part and "was: ✅ Price ABOVE SMA21" in part:
                 key_changes.append("🔻 Broke BELOW SMA21")
-            elif f"ABOVE SMA{actual_sma_period}" in part and f"was: 🔻 Price BELOW SMA{actual_sma_period}" in part:
-                key_changes.append(f"✅ Broke ABOVE SMA{actual_sma_period}")
+            elif "ABOVE SMA55" in part and "was: 🔻 Price BELOW SMA55" in part:
+                key_changes.append("✅ Broke ABOVE SMA55")
             elif "BELOW SMA55" in part and "was: ✅ Price ABOVE SMA55" in part:
                 key_changes.append("🔻 Broke BELOW SMA55")
             elif "Bull Flag" in part and "was: 📉 Bear Flag" in part:
@@ -205,15 +204,6 @@ def generate_signal(df, latest, prev):
     price_vs_sma21 = "✅ Price ABOVE SMA21" if latest.close > sma21 else "🔻 Price BELOW SMA21"
     price_vs_sma55 = "✅ Price ABOVE SMA55" if latest.close > sma55 else "🔻 Price BELOW SMA55"
 
-    # Add SMA144 and SMA233 price relationships (only if data exists)
-    price_vs_sma144 = ""
-    if hasattr(latest, 'sma144') and latest.sma144 is not None and pd.notna(latest.sma144):
-        price_vs_sma144 = "✅ Price ABOVE SMA144" if latest.close > latest.sma144 else "🔻 Price BELOW SMA144"
-
-    price_vs_sma233 = ""
-    if hasattr(latest, 'sma233') and latest.sma233 is not None and pd.notna(latest.sma233):
-        price_vs_sma233 = "✅ Price ABOVE SMA233" if latest.close > latest.sma233 else "🔻 Price BELOW SMA233"
-
     # Comprehensive crossover detection system
     crossover = ""
     if (prev_sma8 <= prev_sma21 or prev_sma21 <= prev_sma55) and \
@@ -267,10 +257,6 @@ def generate_signal(df, latest, prev):
     # Build signal parts
     parts = [flag, trend, price_vs_sma8, price_vs_sma21, price_vs_sma55]
 
-    if price_vs_sma144:
-        parts.append(price_vs_sma144)
-    if price_vs_sma233:
-        parts.append(price_vs_sma233)
     if crossover:
         parts.append(crossover)
     if price_cross:
@@ -300,21 +286,9 @@ def add_indicators(daily_df):
 
         if len(daily_df) >= 55:
             daily_df['sma55'] = ta.trend.sma_indicator(daily_df['close'], window=55)
-            daily_df['sma_period'] = 55
         else:
             fallback_period = min(34, len(daily_df)-1)
             daily_df['sma55'] = ta.trend.sma_indicator(daily_df['close'], window=fallback_period)
-            daily_df['sma_period'] = fallback_period
-
-        if len(daily_df) >= 144:
-            daily_df['sma144'] = ta.trend.sma_indicator(daily_df['close'], window=144)
-        else:
-            daily_df['sma144'] = None
-
-        if len(daily_df) >= 233:
-            daily_df['sma233'] = ta.trend.sma_indicator(daily_df['close'], window=233)
-        else:
-            daily_df['sma233'] = None
 
         if len(daily_df) >= 15:
             daily_df['rsi'] = ta.momentum.rsi(daily_df['close'], window=14)
