@@ -141,17 +141,9 @@ def format_output(symbol, latest, previous, signal, is_crypto):
             elif "Daily DOWN" in part and "was: 🔼 Daily UP" in part:
                 key_changes.append("🔽 Daily DOWN")
             elif "Golden Cross" in part:
-                key_changes.append("✨ Golden Cross")
+                key_changes.append("✨ Golden Cross (SMA8 ↑ SMA55)")
             elif "Death Cross" in part:
-                key_changes.append("⚠️ Death Cross")
-            elif "Major Bull Cross" in part:
-                key_changes.append("🌟 Major Bull Cross (10>21>50)")
-            elif "Major Bear Cross" in part:
-                key_changes.append("💀 Major Bear Cross (10<21<50)")
-            elif "MACD Bullish Cross" in part:
-                key_changes.append("🚀 MACD Bull Cross")
-            elif "MACD Bearish Cross" in part:
-                key_changes.append("⚠️ MACD Bear Cross")
+                key_changes.append("⚠️ Death Cross (SMA8 ↓ SMA55)")
             elif "RSI" in part:
                 if "OVERSOLD" in part:
                     key_changes.append(f"🟢 RSI OVERSOLD ({latest.rsi:.0f})")
@@ -204,26 +196,13 @@ def generate_signal(df, latest, prev):
     price_vs_sma21 = "✅ Price ABOVE SMA21" if latest.close > sma21 else "🔻 Price BELOW SMA21"
     price_vs_sma55 = "✅ Price ABOVE SMA55" if latest.close > sma55 else "🔻 Price BELOW SMA55"
 
-    # Comprehensive crossover detection system
+    # Crossover detection: sma8 crossing sma55 only
     crossover = ""
-    if (prev_sma8 <= prev_sma21 or prev_sma21 <= prev_sma55) and \
-       (sma8 > sma21 > sma55):
-        crossover = "⭐ Perfect Bull Alignment (8>21>55)"
-    elif (prev_sma8 >= prev_sma21 or prev_sma21 >= prev_sma55) and \
-         (sma8 < sma21 < sma55):
-        crossover = "💀 Perfect Bear Alignment (8<21<55)"
-    elif (prev_sma8 <= prev_sma21 and sma8 > sma21) and (sma21 > sma55):
-        crossover = "🌟 Major Bull Cross (8↑21, Strong Trend)"
-    elif (prev_sma8 >= prev_sma21 and sma8 < sma21) and (sma21 < sma55):
-        crossover = "💀 Major Bear Cross (8↓21, Strong Trend)"
-    elif prev_sma8 <= prev_sma21 and sma8 > sma21:
-        crossover = "✨ Golden Cross (SMA8 ↑ SMA21)"
-    elif prev_sma8 >= prev_sma21 and sma8 < sma21:
-        crossover = "⚠️ Death Cross (SMA8 ↓ SMA21)"
-    elif prev_sma21 <= prev_sma55 and sma21 > sma55:
-        crossover = "🚀 Bull Cross (SMA21 ↑ SMA55)"
-    elif prev_sma21 >= prev_sma55 and sma21 < sma55:
-        crossover = "💥 Bear Cross (SMA21 ↓ SMA55)"
+    if prev_sma8 <= prev_sma55 and sma8 > sma55:
+        crossover = "✨ Golden Cross (SMA8 ↑ SMA55)"
+    elif prev_sma8 >= prev_sma55 and sma8 < sma55:
+        crossover = "⚠️ Death Cross (SMA8 ↓ SMA55)"
+
 
     # Price crossover detection for key levels
     price_cross = ""
