@@ -5,7 +5,7 @@ REQUIREMENTS := requirements.txt
 
 SHELL := /bin/bash
 
-.PHONY: install venv money clean shell
+.PHONY: install venv money clean shell tests
 
 install:
 	@echo "🛠️  Setting up virtual environment and installing dependencies..."
@@ -30,3 +30,7 @@ clean:
 lint:
 	@echo "Checking linting using ruff..."
 	ruff check .
+
+tests:
+	@echo "🧪 Running tests..."
+	$(PYTHON) -m pytest test_crossovers.py -v
