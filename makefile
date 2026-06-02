@@ -5,7 +5,7 @@ REQUIREMENTS := requirements.txt
 
 SHELL := /bin/bash
 
-.PHONY: install venv money clean shell tests
+.PHONY: install venv money clean shell tests coverage
 
 install:
 	@echo "🛠️  Setting up virtual environment and installing dependencies..."
@@ -34,3 +34,8 @@ lint:
 tests:
 	@echo "🧪 Running tests..."
 	$(PYTHON) -m pytest test_crossovers.py -v
+
+coverage:
+	@echo "📊 Running tests with coverage..."
+	$(PYTHON) -m pytest test_crossovers.py --cov=technical_analysis --cov-report=term-missing --cov-report=html
+	@echo "📂 HTML report generated in htmlcov/index.html"
