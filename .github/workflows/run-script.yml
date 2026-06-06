@@ -2,8 +2,9 @@ name: Analyze Market Signals
 
 on:
   schedule:
-    - cron: '0 9,13,17 * * *'  
-  workflow_dispatch:       # Allows manual run
+    - cron: '0 17 * * 1-5'   # 17:00 UTC weekdays — after LSE close (17:30 BST / 17:00 GMT)
+    - cron: '30 21 * * 1-5'  # 21:30 UTC weekdays — after NYSE/NASDAQ close
+  workflow_dispatch:           # Allows manual run
 
 jobs:
   analyze:
