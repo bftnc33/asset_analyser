@@ -33,9 +33,9 @@ lint:
 
 tests:
 	@echo "🧪 Running tests..."
-	$(PYTHON) -m pytest test_technical_analysis.py -v
+	$(PYTHON) -m pytest test_technical_analysis.py test_main.py -v
 
 coverage:
 	@echo "📊 Running tests with coverage..."
-	$(PYTHON) -m pytest test_technical_analysis.py --cov=technical_analysis --cov-report=term-missing --cov-report=html
+	$(PYTHON) -m pytest test_technical_analysis.py test_main.py --cov=technical_analysis --cov=main --cov-report=term-missing --cov-report=html
 	@echo "📂 HTML report generated in htmlcov/index.html"
