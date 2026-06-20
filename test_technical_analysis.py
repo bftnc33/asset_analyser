@@ -499,3 +499,136 @@ class TestAnalyseAsset:
     def test_works_for_crypto_symbol(self):
         new_signals, _ = self._run(symbol="ETH/GBP", is_crypto=True)
         assert "ETH/GBP" in new_signals
+
+
+# ===========================================================================
+# format_output — additional missing lines
+# ===========================================================================
+
+class TestFormatOutputMissingLines:
+    BASE_BULL = "📈 Bull Flag (Perfect Fibonacci Alignment) | 🔼 Daily UP | ✅ Price ABOVE SMA8 | ✅ Price ABOVE SMA21 | ✅ Price ABOVE SMA55"
+
+    def _fmt(self, signal, close=100.0, prev_close=99.0, rsi=50.0):
+        latest   = make_format_row(close, rsi)
+        previous = make_format_row(prev_close, rsi)
+        return format_output("TEST", latest, previous, signal, is_crypto=False)
+
+    def test_default_mixed_flag_when_no_keyword_matches(self):
+        """Line 102: else branch — signal has no Bull/Bear/Mixed keyword."""
+        signal = "⚪️ Unknown | 🔼 Daily UP | ✅ Price ABOVE SMA8 | ✅ Price ABOVE SMA21 | ✅ Price ABOVE SMA55"
+        result = self._fmt(signal)
+        assert "⚪️ Mixed" in result
+
+    def test_daily_up_change_in_key_changes(self):
+        """Line 146: Daily UP (was: Daily DOWN) triggers 🔼 Daily UP key change."""
+        signal = "📈 Bull Flag (Perfect Fibonacci Alignment) | 🔼 Daily UP (was: 🔽 Daily DOWN) | ✅ Price ABOVE SMA8 | ✅ Price ABOVE SMA21 | ✅ Price ABOVE SMA55"
+        result = self._fmt(signal)
+        assert "🔼 Daily UP" in result
+
+    def test_daily_down_change_in_key_changes(self):
+        """Line 148: Daily DOWN (was: Daily UP) triggers 🔽 Daily DOWN key change."""
+        signal = "📈 Bull Flag (Perfect Fibonacci Alignment) | 🔽 Daily DOWN (was: 🔼 Daily UP) | ✅ Price ABOVE SMA8 | ✅ Price ABOVE SMA21 | ✅ Price ABOVE SMA55"
+        result = self._fmt(signal)
+        assert "🔽 Daily DOWN" in result
+
+    def test_rsi_oversold_change(self):
+        """Lines 154-155: RSI OVERSOLD key change."""
+        signal = f"{self.BASE_BULL} | RSI OVERSOLD (was: normal)"
+        result = self._fmt(signal, rsi=28.0)
+        assert "RSI OVERSOLD" in result
+
+    def test_rsi_overbought_change(self):
+        """Lines 156-157: RSI OVERBOUGHT key change."""
+        signal = f"{self.BASE_BULL} | RSI OVERBOUGHT (was: normal)"
+        result = self._fmt(signal, rsi=72.0)
+        assert "RSI OVERBOUGHT" in result
+
+    def test_rsi_near_overbought_change(self):
+        """Lines 158-159: RSI Near Overbought key change."""
+        signal = f"{self.BASE_BULL} | RSI Near Overbought (was: normal)"
+        result = self._fmt(signal, rsi=68.0)
+        assert "RSI heating up" in result
+
+    def test_rsi_near_oversold_change(self):
+        """Lines 160-161: RSI Near Oversold key change."""
+        signal = f"{self.BASE_BULL} | RSI Near Oversold (was: normal)"
+        result = self._fmt(signal, rsi=32.0)
+        assert "RSI cooling" in result
+
+
+class TestAddIndicatorsErrorHandling:
+    def test_exception_in_add_indicators_returns_df(self):
+        """Lines 295-297: exception handler returns df without crashing."""
+        import pandas as pd
+        from unittest.mock import patch
+        df = make_price_df(60)
+        with patch("ta.trend.sma_indicator", side_effect=Exception("TA error")):
+            result = add_indicators(df)
+        assert isinstance(result, pd.DataFrame)
+
+
+class TestAnalyseAssetMissingLines:
+    def _run(self, n_rows=100, prev_signals=None, symbol="BTC/GBP", is_crypto=True):
+        df = make_price_df(n_rows)
+        prev_signals = prev_signals or {}
+        new_signals, new_alerts = {}, []
+        analyse_asset(symbol, df, is_crypto, prev_signals, new_signals, new_alerts)
+        return new_signals, new_alerts
+
+    def test_limited_data_still_produces_signal(self):
+        """Line 306: < 55 rows logs warning but still works."""
+        new_signals, _ = self._run(n_rows=40)
+        assert "BTC/GBP" in new_signals
+
+    def test_rsi_nan_produces_no_signal(self):
+        """Lines 319-321: pd.isna(latest.rsi) triggers early return."""
+        from unittest.mock import patch
+        # Patch pd.isna inside technical_analysis to return True so the
+        # NaN guard fires even though dropna already cleaned the column.
+        with patch("technical_analysis.pd.isna", return_value=True):
+            new_signals, alerts = self._run()
+        assert "BTC/GBP" not in new_signals
+        assert len(alerts) == 0
+
+    def test_not_enough_rows_after_dropna(self):
+        """Lines 312-313: fewer than 2 clean rows triggers early return."""
+        import pandas as pd
+        # Build a df with exactly 2 rows but NaN in essential cols so dropna
+        # leaves only 1 row, hitting the len < 2 guard.
+        df = pd.DataFrame({
+            "close":  [100.0, float("nan")],
+            "open":   [99.0,  99.0],
+            "high":   [101.0, 101.0],
+            "low":    [98.0,  98.0],
+            "volume": [1000,  1000],
+        })
+        new_signals, alerts = {}, []
+        analyse_asset("BAD", df, False, {}, new_signals, alerts)
+        assert "BAD" not in new_signals
+
+
+# ===========================================================================
+# main.py — integration tests for the __main__ block (lines 34-69)
+# ===========================================================================
+
+class TestFinalMissingLines:
+    def test_death_cross_key_change(self):
+        """Line 152: Death Cross key change label."""
+        signal = (
+            "📈 Bull Flag (Perfect Fibonacci Alignment) | 🔼 Daily UP"
+            " | ✅ Price ABOVE SMA8 | ✅ Price ABOVE SMA21 | ✅ Price ABOVE SMA55"
+            " | ⚠️ Death Cross (SMA8 ↓ SMA55) (was: ⚠️ No Cross)"
+        )
+        latest   = make_format_row(100.0, rsi=50.0)
+        previous = make_format_row(99.0,  rsi=50.0)
+        result = format_output("TEST", latest, previous, signal, is_crypto=False)
+        assert "Death Cross" in result
+
+    def test_rsi_nan_early_return_in_analyse_asset(self):
+        """Lines 320-321: pd.isna(latest.rsi) triggers early return."""
+        from unittest.mock import patch
+        new_signals, alerts = {}, []
+        with patch("technical_analysis.pd.isna", return_value=True):
+            analyse_asset("SYM", make_price_df(60), False, {}, new_signals, alerts)
+        assert "SYM" not in new_signals
+        assert len(alerts) == 0
