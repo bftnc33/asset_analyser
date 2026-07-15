@@ -55,14 +55,14 @@ if __name__ == "__main__":
         except Exception as e:
             logging.error(f"Error fetching stock {ticker}: {e}")
 
-    # Send email alerts if there are changes
+    # Send daily summary email
     if new_alerts:
         message = "\n\n".join(new_alerts)
-        subject = f"📈 Daily Market Signal Updates ({len(new_alerts)} changes)"
+        subject = f"📈 Daily Market Summary ({len(new_alerts)} assets)"
         send_email(subject, message.replace("\n", "<br>"))
-        logging.info(f"✅ Sent email alert with {len(new_alerts)} signal changes")
+        logging.info(f"✅ Sent daily summary email with {len(new_alerts)} assets")
     else:
-        logging.info("ℹ️ No signal changes detected today")
+        logging.info("ℹ️ No assets to report today")
 
     # Save current signals for next run
     save_signals(new_signals)

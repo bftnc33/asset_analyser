@@ -275,19 +275,21 @@ class TestMainBlock:
         _, _, send_email, _ = run_main(tmp_path, symbols, prev_signals={"BTC/GBP": "old signal"})
         send_email.assert_called_once()
 
-    def test_no_email_when_signals_unchanged(self, tmp_path):
-        """When analyse_asset produces no changes, send_email must not be called."""
+    def test_email_always_sent_even_when_signals_unchanged(self, tmp_path):
+        """Every run sends a daily summary regardless of signal changes."""
         symbols = {"stocks": [], "crypto": ["BTC/GBP"]}
         fixed_signal = "📈 Bull Flag | 🔼 Daily UP | ✅ Price ABOVE SMA8"
         prev_signals = {"BTC/GBP": fixed_signal}
 
-        # Patch analyse_asset to write the same fixed signal — no diff, no alert
-        def fake_analyse(symbol, df, is_crypto, prev_sigs, new_sigs, new_alerts):
-            new_sigs[symbol] = fixed_signal  # identical to prev — no alert appended
+        # Patch analyse_asset to write the same fixed signal — unchanged, but
+        # email should still be sent as we now always include every asset.
+        def fake_analyse(symbol, df, is_crypto, prev_signals, new_signals, new_alerts):
+            new_signals[symbol] = fixed_signal
+            new_alerts.append(f"{symbol}: no change")  # always appended now
 
         with patch("technical_analysis.analyse_asset", side_effect=fake_analyse):
             _, _, send_email, _ = run_main(tmp_path, symbols, prev_signals=prev_signals)
-        send_email.assert_not_called()
+        send_email.assert_called_once()
 
     def test_crypto_fetch_error_is_caught(self, tmp_path):
         """Failing crypto fetch should not crash the script."""

@@ -481,11 +481,12 @@ class TestAnalyseAsset:
         _, alerts = self._run(prev_signals={"BTC/GBP": "something completely different"})
         assert len(alerts) == 1
 
-    def test_no_alert_when_signal_unchanged(self):
+    def test_alert_always_generated(self):
+        """Every asset is always included in alerts regardless of signal change."""
         new_signals, _ = self._run()
-        # Run again with the signal we just generated
+        # Run again with the same signals — alert still generated
         _, alerts = self._run(prev_signals=new_signals)
-        assert len(alerts) == 0
+        assert len(alerts) == 1
 
     def test_too_few_rows_produces_no_signal(self):
         new_signals, alerts = self._run(n_rows=3)

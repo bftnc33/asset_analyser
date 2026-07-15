@@ -329,9 +329,7 @@ def analyse_asset(symbol, daily_df, is_crypto, prev_signals, new_signals, new_al
 
         output = format_output(symbol, latest, prev, full_signal, is_crypto)
         logging.info(output)
-
-        if old_signal != new_signal_raw:
-            new_alerts.append(output)
+        new_alerts.append(output)
 
     except Exception as e:
         logging.error(f"Error analyzing {symbol}: {str(e)}")
