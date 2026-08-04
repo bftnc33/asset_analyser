@@ -124,40 +124,44 @@ def format_output(symbol, latest, previous, signal, is_crypto):
 
     for part in signal_parts:
         part = part.strip()
-        if "(was:" in part:
-            # Extract the change
-            if "ABOVE SMA8" in part and "was: 🔻 Price BELOW SMA8" in part:
+        current = part.split("(was:")[0].strip()
+
+        # Crossovers are always shown — they are point-in-time events
+        if "Golden Cross" in current:
+            key_changes.append("✨ Golden Cross (SMA8 ↑ SMA55)")
+        elif "Death Cross" in current:
+            key_changes.append("⚠️ Death Cross (SMA8 ↓ SMA55)")
+
+        # Everything else only shown when it changed from the previous run
+        elif "(was:" in part:
+            if "ABOVE SMA8" in current and "was: 🔻 Price BELOW SMA8" in part:
                 key_changes.append("✅ Broke ABOVE SMA8")
-            elif "BELOW SMA8" in part and "was: ✅ Price ABOVE SMA8" in part:
+            elif "BELOW SMA8" in current and "was: ✅ Price ABOVE SMA8" in part:
                 key_changes.append("🔻 Broke BELOW SMA8")
-            elif "ABOVE SMA21" in part and "was: 🔻 Price BELOW SMA21" in part:
+            elif "ABOVE SMA21" in current and "was: 🔻 Price BELOW SMA21" in part:
                 key_changes.append("✅ Broke ABOVE SMA21")
-            elif "BELOW SMA21" in part and "was: ✅ Price ABOVE SMA21" in part:
+            elif "BELOW SMA21" in current and "was: ✅ Price ABOVE SMA21" in part:
                 key_changes.append("🔻 Broke BELOW SMA21")
-            elif "ABOVE SMA55" in part and "was: 🔻 Price BELOW SMA55" in part:
+            elif "ABOVE SMA55" in current and "was: 🔻 Price BELOW SMA55" in part:
                 key_changes.append("✅ Broke ABOVE SMA55")
-            elif "BELOW SMA55" in part and "was: ✅ Price ABOVE SMA55" in part:
+            elif "BELOW SMA55" in current and "was: ✅ Price ABOVE SMA55" in part:
                 key_changes.append("🔻 Broke BELOW SMA55")
-            elif "Bull Flag" in part and "was: 📉 Bear Flag" in part:
+            elif "Bull Flag" in current and "was: 📉 Bear Flag" in part:
                 key_changes.append("📈 Turned BULLISH")
-            elif "Bear Flag" in part and "was: 📈 Bull Flag" in part:
+            elif "Bear Flag" in current and "was: 📈 Bull Flag" in part:
                 key_changes.append("📉 Turned BEARISH")
-            elif "Daily UP" in part and "was: 🔽 Daily DOWN" in part:
+            elif "Daily UP" in current and "was: 🔽 Daily DOWN" in part:
                 key_changes.append("🔼 Daily UP")
-            elif "Daily DOWN" in part and "was: 🔼 Daily UP" in part:
+            elif "Daily DOWN" in current and "was: 🔼 Daily UP" in part:
                 key_changes.append("🔽 Daily DOWN")
-            elif "Golden Cross" in part:
-                key_changes.append("✨ Golden Cross (SMA8 ↑ SMA55)")
-            elif "Death Cross" in part:
-                key_changes.append("⚠️ Death Cross (SMA8 ↓ SMA55)")
-            elif "RSI" in part:
-                if "OVERSOLD" in part:
+            elif "RSI" in current:
+                if "OVERSOLD" in current:
                     key_changes.append(f"🟢 RSI OVERSOLD ({latest.rsi:.0f})")
-                elif "OVERBOUGHT" in part:
+                elif "OVERBOUGHT" in current:
                     key_changes.append(f"🔴 RSI OVERBOUGHT ({latest.rsi:.0f})")
-                elif "Near Overbought" in part:
+                elif "Near Overbought" in current:
                     key_changes.append(f"🟡 RSI heating up ({latest.rsi:.0f}→overbought)")
-                elif "Near Oversold" in part:
+                elif "Near Oversold" in current:
                     key_changes.append(f"🟡 RSI cooling ({latest.rsi:.0f}→oversold)")
 
     # Return format: always show status line, add changes if any
