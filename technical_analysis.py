@@ -96,8 +96,11 @@ def format_output(symbol, latest, previous, signal, is_crypto):
         flag = "📈 Bull"
     elif any("Bear Flag" in part for part in current_parts):
         flag = "📉 Bear"
-    elif any("Mixed Signals" in part for part in current_parts):
-        flag = "⚪️ Mixed"
+    elif any("Mixed" in part for part in current_parts):
+        # Extract the full mixed label to show the SMA configuration
+        mixed_part = next((p for p in current_parts if "Mixed" in p), "⚪️ Mixed")
+        # Strip the emoji prefix for the status line — keep the description
+        flag = mixed_part if mixed_part.startswith("⚪️") else "⚪️ Mixed"
     else:
         flag = "⚪️ Mixed"  # Default to mixed if unclear
 
@@ -197,6 +200,14 @@ def generate_signal(df, latest, prev):
         flag = "📈 Bull Flag (Perfect Fibonacci Alignment)"
     elif sma8 < sma21 < sma55:
         flag = "📉 Bear Flag (Perfect Fibonacci Alignment)"
+    elif sma8 > sma55 > sma21:
+        flag = "⚪️ Mixed (8>55>21: Early bull, SMA21 lagging)"
+    elif sma21 > sma8 > sma55:
+        flag = "⚪️ Mixed (21>8>55: Mid-term strong, short-term cooling)"
+    elif sma21 > sma55 > sma8:
+        flag = "⚪️ Mixed (21>55>8: Recovering but SMA8 still weak)"
+    elif sma55 > sma8 > sma21:
+        flag = "⚪️ Mixed (55>8>21: Bear trend, short-term bounce)"
     else:
         flag = "⚪️ Mixed Signals"
 

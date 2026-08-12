@@ -289,9 +289,47 @@ class TestFlag:
         assert any("Bear Flag" in p for p in signal_parts(latest, prev))
 
     def test_mixed_signals_when_not_aligned(self):
+        """sma55 > sma8 > sma21 — bear trend, short-term bounce."""
         latest = make_row(close=90, sma8=85, sma21=80, sma55=95)
         prev   = make_row(close=91, sma8=84, sma21=81, sma55=96)
-        assert any("Mixed Signals" in p for p in signal_parts(latest, prev))
+        assert any("Mixed" in p for p in signal_parts(latest, prev))
+
+    def test_mixed_8_gt_55_gt_21(self):
+        """sma8 > sma55 > sma21 — early bull, SMA21 lagging."""
+        latest = make_row(close=100, sma8=100, sma21=80, sma55=90)
+        prev   = make_row(close=99,  sma8=99,  sma21=79, sma55=89)
+        assert any("8>55>21" in p for p in signal_parts(latest, prev))
+
+    def test_mixed_21_gt_8_gt_55(self):
+        """sma21 > sma8 > sma55 — mid-term strong, short-term cooling."""
+        latest = make_row(close=100, sma8=90, sma21=100, sma55=80)
+        prev   = make_row(close=99,  sma8=89, sma21=99,  sma55=79)
+        assert any("21>8>55" in p for p in signal_parts(latest, prev))
+
+    def test_mixed_21_gt_55_gt_8(self):
+        """sma21 > sma55 > sma8 — recovering but SMA8 still weak."""
+        latest = make_row(close=100, sma8=80, sma21=100, sma55=90)
+        prev   = make_row(close=99,  sma8=79, sma21=99,  sma55=89)
+        assert any("21>55>8" in p for p in signal_parts(latest, prev))
+
+    def test_mixed_55_gt_8_gt_21(self):
+        """sma55 > sma8 > sma21 — bear trend, short-term bounce."""
+        latest = make_row(close=100, sma8=90, sma21=80, sma55=100)
+        prev   = make_row(close=99,  sma8=89, sma21=79, sma55=99)
+        assert any("55>8>21" in p for p in signal_parts(latest, prev))
+
+    def test_mixed_55_gt_21_gt_8(self):
+        """sma55 > sma21 > sma8 — bear order but NOT perfect (price above sma8)."""
+        # sma8 < sma21 < sma55 would be perfect bear, so we need the price
+        # above sma8 to distinguish — but flag is based on SMA order only.
+        # Use values that are clearly 55>21>8 but won't be caught as perfect bear
+        # by ensuring close > sma8 so it's a real mixed scenario in context.
+        # Actually 55>21>8 IS the perfect bear order (8<21<55), so this
+        # configuration cannot be mixed — it will always be Bear Flag.
+        # Test updated to verify Bear Flag fires instead.
+        latest = make_row(close=100, sma8=80, sma21=90, sma55=100)
+        prev   = make_row(close=99,  sma8=79, sma21=89, sma55=99)
+        assert any("Bear Flag" in p for p in signal_parts(latest, prev))
 
 
 class TestCrossovers:
