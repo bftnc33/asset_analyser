@@ -3,7 +3,10 @@ import ta
 import pandas as pd
 
 # --- Setup Logging ---
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
 # --- DIFFERENCE CHECK ---
 def diff_signal_parts(old_signal, new_signal):
@@ -11,8 +14,10 @@ def diff_signal_parts(old_signal, new_signal):
         return new_signal
 
     def extract_items(text):
-        # Clean any existing changes info
-        clean_text = text.split("↪️ Changes:")[0].strip() if "↪️ Changes:" in text else text
+        clean_text = (
+            text.split("↪️ Changes:")[0].strip()
+            if "↪️ Changes:" in text else text
+        )
         return [part.strip() for part in clean_text.split("|") if part.strip()]
 
     old_items = set(extract_items(old_signal))
@@ -20,23 +25,30 @@ def diff_signal_parts(old_signal, new_signal):
     new_items_set = set(new_items_list)
     removed = old_items - new_items_set
 
-    # Build signal with (was: old_value) for changed items
     enhanced_signal_parts = []
     for new_item in new_items_list:
         enhanced_part = new_item
-        # Check if this new item replaces an old one (same category)
         for old_item in removed:
-            if (('Bull Flag' in new_item or 'Bear Flag' in new_item) and ('Bull Flag' in old_item or 'Bear Flag' in old_item)) or \
-               (('Daily UP' in new_item or 'Daily DOWN' in new_item) and ('Daily UP' in old_item or 'Daily DOWN' in old_item)) or \
-               (('ABOVE SMA8' in new_item or 'BELOW SMA8' in new_item) and ('ABOVE SMA8' in old_item or 'BELOW SMA8' in old_item)) or \
-               (('ABOVE SMA21' in new_item or 'BELOW SMA21' in new_item) and ('ABOVE SMA21' in old_item or 'BELOW SMA21' in old_item)) or \
-               (('ABOVE SMA55' in new_item or 'BELOW SMA55' in new_item) and ('ABOVE SMA55' in old_item or 'BELOW SMA55' in old_item)) or \
-               ('MACD' in new_item and 'MACD' in old_item):
+            if (
+                ("Bull Flag" in new_item or "Bear Flag" in new_item)
+                and ("Bull Flag" in old_item or "Bear Flag" in old_item)
+            ) or (
+                ("Weekly UP" in new_item or "Weekly DOWN" in new_item)
+                and ("Weekly UP" in old_item or "Weekly DOWN" in old_item)
+            ) or (
+                ("ABOVE SMA200" in new_item or "BELOW SMA200" in new_item)
+                and ("ABOVE SMA200" in old_item or "BELOW SMA200" in old_item)
+            ) or (
+                "SMA200 Distance" in new_item and "SMA200 Distance" in old_item
+            ) or (
+                "RSI" in new_item and "RSI" in old_item
+            ):
                 enhanced_part = f"{new_item} (was: {old_item})"
                 break
         enhanced_signal_parts.append(enhanced_part)
 
     return " | ".join(enhanced_signal_parts)
+
 
 # --- FORMAT OUTPUT ---
 def format_output(symbol, latest, previous, signal, is_crypto):
@@ -50,7 +62,6 @@ def format_output(symbol, latest, previous, signal, is_crypto):
     elif symbol.endswith(("SGLN.L", "SSLN.L")):
         currency = "£"
         suffix = ""
-        # Convert pence to pounds by dividing by 100
         current_close = latest.close / 100
         previous_close = previous.close / 100
         price_fmt = "{:,.4f}" if current_close < 1 else "{:,.2f}"
@@ -61,14 +72,12 @@ def format_output(symbol, latest, previous, signal, is_crypto):
         current_close = latest.close
         previous_close = previous.close
     elif is_crypto:
-        # Crypto in GBP
         currency = "£"
         suffix = ""
         price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
         current_close = latest.close
         previous_close = previous.close
     else:
-        # US stocks in USD
         currency = "$"
         suffix = ""
         price_fmt = "{:,.4f}" if latest.close < 1 else "{:,.2f}"
@@ -76,113 +85,103 @@ def format_output(symbol, latest, previous, signal, is_crypto):
         previous_close = previous.close
 
     price_change = ((current_close - previous_close) / previous_close) * 100
-    change_color = "🟢" if price_change > 0 else "🔴" if price_change < 0 else "⚪️"
+    change_color = (
+        "🟢" if price_change > 0 else "🔴" if price_change < 0 else "⚪️"
+    )
 
-    # Parse the signal to build current status
-    signal_parts = signal.split(' | ')
+    signal_parts = signal.split(" | ")
 
-    # Extract only the current status (before any "was:" text)
     def extract_current_status(part):
-        """Extract the current status from a signal part, ignoring (was: ...) sections"""
         if "(was:" in part:
             return part.split("(was:")[0].strip()
         return part.strip()
 
-    # Build compact status line using only current status
-    current_parts = [extract_current_status(part) for part in signal_parts]
+    current_parts = [extract_current_status(p) for p in signal_parts]
 
-    # Determine flag with proper Mixed Signals handling
-    if any("Bull Flag" in part for part in current_parts):
+    # Bull / bear derived purely from price vs SMA200
+    if any("Bull Flag" in p for p in current_parts):
         flag = "📈 Bull"
-    elif any("Bear Flag" in part for part in current_parts):
+    elif any("Bear Flag" in p for p in current_parts):
         flag = "📉 Bear"
-    elif any("Mixed" in part for part in current_parts):
-        # Extract the full mixed label to show the SMA configuration
-        mixed_part = next((p for p in current_parts if "Mixed" in p), "⚪️ Mixed")
-        # Strip the emoji prefix for the status line — keep the description
-        flag = mixed_part if mixed_part.startswith("⚪️") else "⚪️ Mixed"
     else:
-        flag = "⚪️ Mixed"  # Default to mixed if unclear
+        flag = "⚪️ Unknown"
 
-    above_sma8 = "✅" if any(part == "✅ Price ABOVE SMA8" for part in current_parts) else "🔻"
-    above_sma21 = "✅" if any(part == "✅ Price ABOVE SMA21" for part in current_parts) else "🔻"
-    above_sma55 = "✅" if any(part == "✅ Price ABOVE SMA55" for part in current_parts) else "🔻"
+    # SMA200 position indicator
+    above_sma200 = (
+        "✅" if any(p == "✅ Price ABOVE SMA200" for p in current_parts)
+        else "🔻"
+    )
 
-    # RSI with momentum arrow if accelerating
+    # SMA200 distance
+    sma200_dist = ""
+    for p in current_parts:
+        if "SMA200 Distance" in p:
+            sma200_dist = p
+            break
+
+    # RSI with momentum arrow
     rsi_arrow = ""
-    if any("RSI ↗️ Accelerating" in part for part in current_parts):
+    if any("RSI ↗️ Accelerating" in p for p in current_parts):
         rsi_arrow = "↗️"
-    elif any("RSI ↘️ Decelerating" in part for part in current_parts):
+    elif any("RSI ↘️ Decelerating" in p for p in current_parts):
         rsi_arrow = "↘️"
     rsi_status = f"RSI:{latest.rsi:.0f}{rsi_arrow}"
 
-    # Build main status line
-    status_parts = [flag, f"{above_sma8}SMA8", f"{above_sma21}SMA21", f"{above_sma55}SMA55"]
-    status_parts.append(rsi_status)
+    status_parts = [flag, f"{above_sma200}SMA200", sma200_dist, rsi_status]
+    status_parts = [p for p in status_parts if p]  # drop any empty strings
 
-    main_line = f"{symbol}: {currency}{price_fmt.format(current_close)}{suffix} {change_color}{price_change:+.1f}% | {' | '.join(status_parts)}"
+    main_line = (
+        f"{symbol}: {currency}{price_fmt.format(current_close)}{suffix} "
+        f"{change_color}{price_change:+.1f}% | {' | '.join(status_parts)}"
+    )
 
-    # Extract key changes for second line
+    # Key changes
     key_changes = []
-
     for part in signal_parts:
         part = part.strip()
         current = part.split("(was:")[0].strip()
 
-        # Crossovers are always shown — they are point-in-time events
-        if "Golden Cross" in current:
-            key_changes.append("✨ Golden Cross (SMA8 ↑ SMA55)")
-        elif "Death Cross" in current:
-            key_changes.append("⚠️ Death Cross (SMA8 ↓ SMA55)")
-
-        # Everything else only shown when it changed from the previous run
-        elif "(was:" in part:
-            if "ABOVE SMA8" in current and "was: 🔻 Price BELOW SMA8" in part:
-                key_changes.append("✅ Broke ABOVE SMA8")
-            elif "BELOW SMA8" in current and "was: ✅ Price ABOVE SMA8" in part:
-                key_changes.append("🔻 Broke BELOW SMA8")
-            elif "ABOVE SMA21" in current and "was: 🔻 Price BELOW SMA21" in part:
-                key_changes.append("✅ Broke ABOVE SMA21")
-            elif "BELOW SMA21" in current and "was: ✅ Price ABOVE SMA21" in part:
-                key_changes.append("🔻 Broke BELOW SMA21")
-            elif "ABOVE SMA55" in current and "was: 🔻 Price BELOW SMA55" in part:
-                key_changes.append("✅ Broke ABOVE SMA55")
-            elif "BELOW SMA55" in current and "was: ✅ Price ABOVE SMA55" in part:
-                key_changes.append("🔻 Broke BELOW SMA55")
-            elif "Bull Flag" in current and "was: 📉 Bear Flag" in part:
+        if "(was:" in part:
+            if "ABOVE SMA200" in current and "BELOW SMA200" in part.split("(was:")[1]:
+                key_changes.append("✅ Broke ABOVE SMA200")
+            elif "BELOW SMA200" in current and "ABOVE SMA200" in part.split("(was:")[1]:
+                key_changes.append("🔻 Broke BELOW SMA200")
+            elif "Bull Flag" in current and "Bear Flag" in part.split("(was:")[1]:
                 key_changes.append("📈 Turned BULLISH")
-            elif "Bear Flag" in current and "was: 📈 Bull Flag" in part:
+            elif "Bear Flag" in current and "Bull Flag" in part.split("(was:")[1]:
                 key_changes.append("📉 Turned BEARISH")
-            elif "Daily UP" in current and "was: 🔽 Daily DOWN" in part:
-                key_changes.append("🔼 Daily UP")
-            elif "Daily DOWN" in current and "was: 🔼 Daily UP" in part:
-                key_changes.append("🔽 Daily DOWN")
+            elif "Weekly UP" in current and "Weekly DOWN" in part.split("(was:")[1]:
+                key_changes.append("🔼 Weekly UP")
+            elif "Weekly DOWN" in current and "Weekly UP" in part.split("(was:")[1]:
+                key_changes.append("🔽 Weekly DOWN")
             elif "RSI" in current:
                 if "OVERSOLD" in current:
                     key_changes.append(f"🟢 RSI OVERSOLD ({latest.rsi:.0f})")
                 elif "OVERBOUGHT" in current:
                     key_changes.append(f"🔴 RSI OVERBOUGHT ({latest.rsi:.0f})")
                 elif "Near Overbought" in current:
-                    key_changes.append(f"🟡 RSI heating up ({latest.rsi:.0f}→overbought)")
+                    key_changes.append(
+                        f"🟡 RSI heating up ({latest.rsi:.0f}→overbought)"
+                    )
                 elif "Near Oversold" in current:
-                    key_changes.append(f"🟡 RSI cooling ({latest.rsi:.0f}→oversold)")
+                    key_changes.append(
+                        f"🟡 RSI cooling ({latest.rsi:.0f}→oversold)"
+                    )
 
-    # Return format: always show status line, add changes if any
     if key_changes:
         changes_line = f" {' | '.join(key_changes)}"
         return f"{main_line}\n{changes_line}"
     else:
         return main_line
 
+
 # --- VOLUME COLOR DETECTION ---
 def get_volume_color(df, latest_idx):
     """Determine if volume candle is green (buying) or red (selling)"""
     if latest_idx < 1:
         return "neutral"
-
     current = df.iloc[latest_idx]
     previous = df.iloc[latest_idx - 1]
-
     if current.close > previous.close:
         return "green"
     elif current.close < previous.close:
@@ -190,62 +189,47 @@ def get_volume_color(df, latest_idx):
     else:
         return "neutral"
 
+
 # --- SIGNAL GENERATION ---
 def generate_signal(df, latest, prev):
-    sma8, sma21, sma55 = latest.sma8, latest.sma21, latest.sma55
-    prev_sma8, prev_sma21, prev_sma55 = prev.sma8, prev.sma21, prev.sma55
+    sma200 = latest.sma200
 
-    # Fibonacci-based trend identification system
-    if sma8 > sma21 > sma55:
-        flag = "📈 Bull Flag (Perfect Fibonacci Alignment)"
-    elif sma8 < sma21 < sma55:
-        flag = "📉 Bear Flag (Perfect Fibonacci Alignment)"
-    elif sma8 > sma55 > sma21:
-        flag = "⚪️ Mixed (8>55>21: Early bull, SMA21 lagging)"
-    elif sma21 > sma8 > sma55:
-        flag = "⚪️ Mixed (21>8>55: Mid-term strong, short-term cooling)"
-    elif sma21 > sma55 > sma8:
-        flag = "⚪️ Mixed (21>55>8: Recovering but SMA8 still weak)"
-    elif sma55 > sma8 > sma21:
-        flag = "⚪️ Mixed (55>8>21: Bear trend, short-term bounce)"
+    # Bull / bear based purely on price vs SMA200
+    if latest.close > sma200:
+        flag = "📈 Bull Flag (Price ABOVE SMA200)"
     else:
-        flag = "⚪️ Mixed Signals"
+        flag = "📉 Bear Flag (Price BELOW SMA200)"
 
-    trend = "🔼 Daily UP" if latest.close > prev.close else "🔽 Daily DOWN"
+    price_vs_sma200 = (
+        "✅ Price ABOVE SMA200" if latest.close > sma200
+        else "🔻 Price BELOW SMA200"
+    )
 
-    price_vs_sma8 = "✅ Price ABOVE SMA8" if latest.close > sma8 else "🔻 Price BELOW SMA8"
-    price_vs_sma21 = "✅ Price ABOVE SMA21" if latest.close > sma21 else "🔻 Price BELOW SMA21"
-    price_vs_sma55 = "✅ Price ABOVE SMA55" if latest.close > sma55 else "🔻 Price BELOW SMA55"
+    # Distance from SMA200 as a percentage
+    sma200_distance = ((latest.close - sma200) / sma200) * 100
+    dist_sign = "+" if sma200_distance >= 0 else ""
+    sma200_dist_str = (
+        f"SMA200 Distance: {dist_sign}{sma200_distance:.1f}%"
+    )
 
-    # Crossover detection: sma8 crossing sma55 only
-    crossover = ""
-    if prev_sma8 <= prev_sma55 and sma8 > sma55:
-        crossover = "✨ Golden Cross (SMA8 ↑ SMA55)"
-    elif prev_sma8 >= prev_sma55 and sma8 < sma55:
-        crossover = "⚠️ Death Cross (SMA8 ↓ SMA55)"
+    trend = (
+        "🔼 Weekly UP" if latest.close > prev.close else "🔽 Weekly DOWN"
+    )
 
-
-    # Price crossover detection for key levels
-    price_cross = ""
-    if prev.close <= prev_sma55 and latest.close > sma55:
-        price_cross = "🚀 Price crossed ABOVE 55MA"
-    elif prev.close >= prev_sma55 and latest.close < sma55:
-        price_cross = "💥 Price crossed BELOW 55MA"
-
-    # Daily volume analysis
+    # Volume analysis
     spike_ratio = latest.volume / latest.vol_avg if latest.vol_avg else 0
     volume_color = get_volume_color(df, len(df) - 1)
     volume_spike = ""
     if spike_ratio > 2.5:
         if volume_color == "green":
-            volume_spike = "📊🟢 Daily Volume: 🚨 MAJOR BUYING"
+            volume_spike = "📊🟢 Weekly Volume: 🚨 MAJOR BUYING"
         elif volume_color == "red":
-            volume_spike = "📊🔴 Daily Volume: 🚨 MAJOR SELLING"
+            volume_spike = "📊🔴 Weekly Volume: 🚨 MAJOR SELLING"
     elif spike_ratio > 1.5:
         if volume_color == "green":
-            volume_spike = "📊🟢 Daily Volume: ⚠️ Strong Buying"
+            volume_spike = "📊🟢 Weekly Volume: ⚠️ Strong Buying"
         elif volume_color == "red":
-            volume_spike = "📊🔴 Daily Volume: ⚠️ Strong Selling"
+            volume_spike = "📊🔴 Weekly Volume: ⚠️ Strong Selling"
 
     # RSI momentum
     rsi_change = latest.rsi - prev.rsi
@@ -254,13 +238,8 @@ def generate_signal(df, latest, prev):
         direction = "↗️ Accelerating" if rsi_change > 0 else "↘️ Decelerating"
         rsi_momentum = f"RSI {direction}"
 
-    # Build signal parts
-    parts = [flag, trend, price_vs_sma8, price_vs_sma21, price_vs_sma55]
+    parts = [flag, trend, price_vs_sma200, sma200_dist_str]
 
-    if crossover:
-        parts.append(crossover)
-    if price_cross:
-        parts.append(price_cross)
     if volume_spike:
         parts.append(volume_spike)
     if rsi_momentum:
@@ -270,72 +249,72 @@ def generate_signal(df, latest, prev):
 
 
 # --- INDICATORS ---
-def add_indicators(daily_df):
-    """Add indicators for daily timeframe with Fibonacci SMAs"""
+def add_indicators(df):
+    """Add SMA200, RSI, and volume average for weekly timeframe."""
     try:
-        if len(daily_df) < 8:
-            logging.warning(f"Insufficient data for SMA8: {len(daily_df)} days")
-            return daily_df
+        if len(df) < 200:
+            logging.warning(
+                f"Insufficient data for SMA200: {len(df)} rows available. "
+                f"Need at least 200 weekly candles (~4 years)."
+            )
+            return df
 
-        daily_df['sma8'] = ta.trend.sma_indicator(daily_df['close'], window=8)
+        df["sma200"] = ta.trend.sma_indicator(df["close"], window=200)
 
-        if len(daily_df) >= 21:
-            daily_df['sma21'] = ta.trend.sma_indicator(daily_df['close'], window=21)
+        if len(df) >= 15:
+            df["rsi"] = ta.momentum.rsi(df["close"], window=14)
         else:
-            daily_df['sma21'] = ta.trend.sma_indicator(daily_df['close'], window=min(len(daily_df)-1, 14))
+            df["rsi"] = ta.momentum.rsi(
+                df["close"], window=min(len(df) - 1, 7)
+            )
 
-        if len(daily_df) >= 55:
-            daily_df['sma55'] = ta.trend.sma_indicator(daily_df['close'], window=55)
-        else:
-            fallback_period = min(34, len(daily_df)-1)
-            daily_df['sma55'] = ta.trend.sma_indicator(daily_df['close'], window=fallback_period)
+        df["vol_avg"] = df["volume"].ewm(
+            span=min(10, len(df)), adjust=False
+        ).mean()
 
-        if len(daily_df) >= 15:
-            daily_df['rsi'] = ta.momentum.rsi(daily_df['close'], window=14)
-        else:
-            daily_df['rsi'] = ta.momentum.rsi(daily_df['close'], window=min(len(daily_df)-1, 7))
-
-        daily_df['vol_avg'] = daily_df['volume'].ewm(span=min(10, len(daily_df)), adjust=False).mean()
-
-        if len(daily_df) >= 35:
-            macd = ta.trend.MACD(daily_df['close'], window_slow=26, window_fast=12, window_sign=9)
-        else:
-            macd = ta.trend.MACD(daily_df['close'], window_slow=20, window_fast=8, window_sign=6)
-
-        daily_df['macd'] = macd.macd()
-        daily_df['macd_histogram'] = macd.macd_diff()
-
-        return daily_df
+        return df
 
     except Exception as e:
         logging.error(f"Error adding indicators: {e}")
-        return daily_df
+        return df
+
 
 # --- ANALYSE ASSET ---
-def analyse_asset(symbol, daily_df, is_crypto, prev_signals, new_signals, new_alerts):
-    """Main analysis function - analyzes daily data"""
+def analyse_asset(
+    symbol, df, is_crypto, prev_signals, new_signals, new_alerts
+):
+    """Main analysis function - analyses weekly data."""
     try:
-        daily_df = add_indicators(daily_df)
+        df = add_indicators(df)
 
-        if len(daily_df) < 55:
-            logging.info(f"{symbol}: Limited data ({len(daily_df)} days), using shorter timeframe analysis")
-
-        essential_cols = ['close', 'sma8', 'sma21', 'rsi']
-        daily_df = daily_df.dropna(subset=essential_cols)
-
-        if len(daily_df) < 2:
-            logging.warning(f"{symbol}: Not enough data after cleaning ({len(daily_df)} days).")
+        if len(df) < 200:
+            logging.info(
+                f"{symbol}: Insufficient data for SMA200 "
+                f"({len(df)} weekly candles, need 200)."
+            )
             return
 
-        logging.debug(f"{symbol}: Available columns: {daily_df.columns.tolist()}")
+        essential_cols = ["close", "sma200", "rsi"]
+        df = df.dropna(subset=essential_cols)
 
-        latest, prev = daily_df.iloc[-1], daily_df.iloc[-2]
-
-        if not hasattr(latest, 'rsi') or pd.isna(latest.rsi):
-            logging.error(f"{symbol}: RSI not available. Latest row data: {latest.index.tolist()}")
+        if len(df) < 2:
+            logging.warning(
+                f"{symbol}: Not enough data after cleaning ({len(df)} rows)."
+            )
             return
 
-        new_signal_raw = generate_signal(daily_df, latest, prev)
+        logging.debug(f"{symbol}: Available columns: {df.columns.tolist()}")
+
+        latest, prev = df.iloc[-1], df.iloc[-2]
+
+        if not hasattr(latest, "rsi") or pd.isna(latest.rsi):
+            logging.error(
+                f"{symbol}: RSI not available. "
+                f"Latest row data: {latest.index.tolist()}"
+            )
+            return
+
+        new_signal_raw = generate_signal(df, latest, prev)
 
         old_signal = prev_signals.get(symbol)
         full_signal = diff_signal_parts(old_signal, new_signal_raw)
@@ -349,5 +328,7 @@ def analyse_asset(symbol, daily_df, is_crypto, prev_signals, new_signals, new_al
     except Exception as e:
         logging.error(f"Error analyzing {symbol}: {str(e)}")
         import traceback
-        logging.debug(f"Full traceback for {symbol}: {traceback.format_exc()}")
+        logging.debug(
+            f"Full traceback for {symbol}: {traceback.format_exc()}"
+        )
         return
