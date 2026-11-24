@@ -28,7 +28,7 @@ import pandas as pd
 # Helpers
 # ===========================================================================
 
-def make_df(n=60):
+def make_df(n=210):  # raised from 60 — SMA200 requires at least 200 rows
     return pd.DataFrame({
         "close":  [100.0 + i for i in range(n)],
         "open":   [99.0  + i for i in range(n)],
@@ -38,7 +38,8 @@ def make_df(n=60):
     })
 
 
-def run_main(tmp_path, symbols, prev_signals=None, crypto_side_effect=None, stock_side_effect=None):
+def run_main(tmp_path, symbols, prev_signals=None,
+             crypto_side_effect=None, stock_side_effect=None):
     """
     Run the __main__ block of main.py in-process using runpy so that
     coverage is captured. All external I/O is patched.
@@ -49,15 +50,23 @@ def run_main(tmp_path, symbols, prev_signals=None, crypto_side_effect=None, stoc
     if prev_signals is not None:
         signal_file.write_text(json.dumps(prev_signals))
 
-    fetch_crypto = MagicMock(side_effect=crypto_side_effect or (lambda s: make_df()))
-    fetch_stock  = MagicMock(side_effect=stock_side_effect  or (lambda s: make_df()))
+    fetch_crypto = MagicMock(
+        side_effect=crypto_side_effect or (lambda s: make_df())
+    )
+    fetch_stock  = MagicMock(
+        side_effect=stock_side_effect  or (lambda s: make_df())
+    )
     send_email   = MagicMock()
 
     # Pop main so runpy re-executes it fresh each call
     sys.modules.pop("main", None)
 
-    with patch("builtins.open", side_effect=_open_factory(symbols_file, signal_file)), \
-         patch("os.path.exists",  side_effect=lambda p: p == str(signal_file) and signal_file.exists()), \
+    with patch("builtins.open",
+               side_effect=_open_factory(symbols_file, signal_file)), \
+         patch("os.path.exists",
+               side_effect=lambda p: (
+                   p == str(signal_file) and signal_file.exists()
+               )), \
          patch("data_feeds.fetch_crypto_data", fetch_crypto), \
          patch("data_feeds.fetch_stock_data",  fetch_stock), \
          patch("alerts.send_email",            send_email):
@@ -70,14 +79,15 @@ def run_main(tmp_path, symbols, prev_signals=None, crypto_side_effect=None, stoc
 
 
 def _open_factory(symbols_file, signal_file):
-    """Return a side_effect function that serves our fixture files and delegates the rest."""
+    """Return a side_effect that serves fixture files and delegates the rest."""
     import builtins
     real_open = builtins.open
 
     def _open(path, mode="r", *args, **kwargs):
         if str(path) == "symbols.json" or path == "symbols.json":
             return real_open(str(symbols_file), mode, *args, **kwargs)
-        if str(path) == str(signal_file) or str(path) == "signals.json":
+        if (str(path) == str(signal_file)
+                or str(path) == "signals.json"):
             return real_open(str(signal_file), mode, *args, **kwargs)
         return real_open(path, mode, *args, **kwargs)
 
@@ -93,12 +103,15 @@ class TestLoadSymbols:
         f = tmp_path / "symbols.json"
         f.write_text(json.dumps(data))
         sys.modules.pop("main", None)
-        with patch("builtins.open", side_effect=_open_factory(f, tmp_path / "signals.json")):
+        with patch("builtins.open",
+                   side_effect=_open_factory(f, tmp_path / "signals.json")):
             from main import load_symbols
         return load_symbols(str(f))
 
     def test_returns_stocks_and_crypto(self, tmp_path):
-        stocks, crypto = self._load(tmp_path, {"stocks": ["AAPL", "TSLA"], "crypto": ["BTC/GBP"]})
+        stocks, crypto = self._load(
+            tmp_path, {"stocks": ["AAPL", "TSLA"], "crypto": ["BTC/GBP"]}
+        )
         assert stocks == ["AAPL", "TSLA"]
         assert crypto == ["BTC/GBP"]
 
@@ -121,7 +134,8 @@ class TestLoadSymbols:
         sys.modules.pop("main", None)
         f = tmp_path / "symbols.json"
         f.write_text(json.dumps({}))
-        with patch("builtins.open", side_effect=_open_factory(f, tmp_path / "signals.json")):
+        with patch("builtins.open",
+                   side_effect=_open_factory(f, tmp_path / "signals.json")):
             from main import load_symbols
         with pytest.raises(FileNotFoundError):
             load_symbols(str(tmp_path / "nonexistent.json"))
@@ -130,7 +144,8 @@ class TestLoadSymbols:
         sys.modules.pop("main", None)
         f = tmp_path / "symbols.json"
         f.write_text(json.dumps({}))
-        with patch("builtins.open", side_effect=_open_factory(f, tmp_path / "signals.json")):
+        with patch("builtins.open",
+                   side_effect=_open_factory(f, tmp_path / "signals.json")):
             from main import load_symbols
         bad = tmp_path / "bad.json"
         bad.write_text("not valid json {{{")
@@ -138,7 +153,10 @@ class TestLoadSymbols:
             load_symbols(str(bad))
 
     def test_multiple_stocks_and_crypto(self, tmp_path):
-        data = {"stocks": ["AAPL", "TSLA", "BARC.L"], "crypto": ["BTC/GBP", "ETH/GBP", "ETH/BTC"]}
+        data = {
+            "stocks": ["AAPL", "TSLA", "BARC.L"],
+            "crypto": ["BTC/GBP", "ETH/GBP", "ETH/BTC"],
+        }
         stocks, crypto = self._load(tmp_path, data)
         assert len(stocks) == 3
         assert len(crypto) == 3
@@ -153,7 +171,8 @@ class TestLoadPreviousSignals:
         sys.modules.pop("main", None)
         sf = tmp_path / "symbols.json"
         sf.write_text(json.dumps(symbols or {}))
-        with patch("builtins.open", side_effect=_open_factory(sf, tmp_path / "signals.json")):
+        with patch("builtins.open",
+                   side_effect=_open_factory(sf, tmp_path / "signals.json")):
             from main import load_previous_signals
         return load_previous_signals
 
@@ -203,7 +222,8 @@ class TestSaveSignals:
         sys.modules.pop("main", None)
         sf = tmp_path / "symbols.json"
         sf.write_text(json.dumps({}))
-        with patch("builtins.open", side_effect=_open_factory(sf, tmp_path / "signals.json")):
+        with patch("builtins.open",
+                   side_effect=_open_factory(sf, tmp_path / "signals.json")):
             from main import save_signals, load_previous_signals
         return save_signals, load_previous_signals
 
@@ -256,56 +276,67 @@ class TestSaveSignals:
 
 
 # ===========================================================================
-# __main__ block (lines 34-69)
+# __main__ block
 # ===========================================================================
 
 class TestMainBlock:
     def test_signals_file_written_after_run(self, tmp_path):
-        _, _, _, signal_file = run_main(tmp_path, {"stocks": ["AAPL"], "crypto": ["BTC/GBP"]})
+        _, _, _, signal_file = run_main(
+            tmp_path, {"stocks": ["AAPL"], "crypto": ["BTC/GBP"]}
+        )
         assert signal_file.exists()
 
     def test_signals_contain_all_symbols(self, tmp_path):
-        _, _, _, signal_file = run_main(tmp_path, {"stocks": ["AAPL"], "crypto": ["BTC/GBP"]})
+        _, _, _, signal_file = run_main(
+            tmp_path, {"stocks": ["AAPL"], "crypto": ["BTC/GBP"]}
+        )
         signals = json.loads(signal_file.read_text())
         assert "AAPL" in signals
         assert "BTC/GBP" in signals
 
     def test_send_email_called_when_signals_change(self, tmp_path):
         symbols = {"stocks": [], "crypto": ["BTC/GBP"]}
-        _, _, send_email, _ = run_main(tmp_path, symbols, prev_signals={"BTC/GBP": "old signal"})
+        _, _, send_email, _ = run_main(
+            tmp_path, symbols, prev_signals={"BTC/GBP": "old signal"}
+        )
         send_email.assert_called_once()
 
     def test_email_always_sent_even_when_signals_unchanged(self, tmp_path):
-        """Every run sends a daily summary regardless of signal changes."""
+        """Every run sends a weekly summary regardless of signal changes."""
         symbols = {"stocks": [], "crypto": ["BTC/GBP"]}
-        fixed_signal = "📈 Bull Flag | 🔼 Daily UP | ✅ Price ABOVE SMA8"
+        fixed_signal = (
+            "📈 Bull Flag (Price ABOVE SMA200) | 🔼 Weekly UP "
+            "| ✅ Price ABOVE SMA200 | SMA200 Distance: +5.0%"
+        )
         prev_signals = {"BTC/GBP": fixed_signal}
 
-        # Patch analyse_asset to write the same fixed signal — unchanged, but
-        # email should still be sent as we now always include every asset.
-        def fake_analyse(symbol, df, is_crypto, prev_signals, new_signals, new_alerts):
+        def fake_analyse(
+            symbol, df, is_crypto, prev_signals, new_signals, new_alerts
+        ):
             new_signals[symbol] = fixed_signal
-            new_alerts.append(f"{symbol}: no change")  # always appended now
+            new_alerts.append(f"{symbol}: no change")
 
-        with patch("technical_analysis.analyse_asset", side_effect=fake_analyse):
-            _, _, send_email, _ = run_main(tmp_path, symbols, prev_signals=prev_signals)
+        with patch("technical_analysis.analyse_asset",
+                   side_effect=fake_analyse):
+            _, _, send_email, _ = run_main(
+                tmp_path, symbols, prev_signals=prev_signals
+            )
         send_email.assert_called_once()
 
     def test_crypto_fetch_error_is_caught(self, tmp_path):
         """Failing crypto fetch should not crash the script."""
         def bad_fetch(s): raise Exception("Network failure")
-        _, _, _, signal_file = run_main(
+        run_main(
             tmp_path,
             {"stocks": [], "crypto": ["BTC/GBP"]},
             crypto_side_effect=bad_fetch,
         )
-        # Script completed — signal file may be empty but no exception raised
         assert True
 
     def test_stock_fetch_error_is_caught(self, tmp_path):
         """Failing stock fetch should not crash the script."""
         def bad_fetch(s): raise Exception("Network failure")
-        _, _, _, signal_file = run_main(
+        run_main(
             tmp_path,
             {"stocks": ["AAPL"], "crypto": []},
             stock_side_effect=bad_fetch,
@@ -322,7 +353,9 @@ class TestMainBlock:
 
     def test_email_subject_contains_change_count(self, tmp_path):
         symbols = {"stocks": [], "crypto": ["BTC/GBP"]}
-        _, _, send_email, _ = run_main(tmp_path, symbols, prev_signals={"BTC/GBP": "old signal"})
+        _, _, send_email, _ = run_main(
+            tmp_path, symbols, prev_signals={"BTC/GBP": "old signal"}
+        )
         if send_email.called:
             subject = send_email.call_args[0][0]
             assert "1" in subject

@@ -8,6 +8,68 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
+# --- SMA200 COLOUR HELPER ---
+
+def sma200_distance_colour(distance_pct):
+    """
+    Return an RGB CSS colour string scaled by distance from SMA200.
+
+    Above SMA200 (positive distance) → green shades.
+    Below SMA200 (negative distance) → red shades.
+    At SMA200 (zero)                 → neutral light grey.
+
+    Intensity scales linearly from 0% to CAP_PCT distance,
+    clamped so it never exceeds the darkest shade.
+
+    Returns a tuple of (background_colour, text_colour) CSS strings.
+    """
+    CAP_PCT = 20.0  # distance at which colour reaches maximum saturation
+
+    intensity = min(abs(distance_pct) / CAP_PCT, 1.0)
+
+    if distance_pct > 0:
+        # Green: interpolate from near-white (#f0fff0) to dark green (#1a5c1a)
+        r = int(240 - (240 - 26)  * intensity)   # 240 → 26
+        g = int(255 - (255 - 92)  * intensity)   # 255 → 92
+        b = int(240 - (240 - 26)  * intensity)   # 240 → 26
+    elif distance_pct < 0:
+        # Red: interpolate from near-white (#fff0f0) to dark red (#5c1a1a)
+        r = int(255 - (255 - 92)  * intensity)   # 255 → 92
+        g = int(240 - (240 - 26)  * intensity)   # 240 → 26
+        b = int(240 - (240 - 26)  * intensity)   # 240 → 26
+    else:
+        r, g, b = 245, 245, 245  # neutral grey
+
+    bg_colour = f"rgb({r},{g},{b})"
+
+    # Switch text to white once background is dark enough
+    text_colour = "white" if intensity > 0.55 else "#1a1a1a"
+
+    return bg_colour, text_colour
+
+
+def format_asset_html(main_line, changes_line, distance_pct):
+    """
+    Wrap a single asset's output in a colour-coded HTML block.
+    """
+    bg, text = sma200_distance_colour(distance_pct)
+    changes_html = (
+        f'<div style="font-size:0.85em; margin-top:4px; opacity:0.9;">'
+        f'{changes_line.strip()}</div>'
+        if changes_line else ""
+    )
+    return (
+        f'<div style="'
+        f'background-color:{bg}; color:{text}; '
+        f'padding:10px 14px; margin:4px 0; '
+        f'border-radius:6px; font-family:monospace; font-size:0.95em;'
+        f'">'
+        f'{main_line}'
+        f'{changes_html}'
+        f'</div>'
+    )
+
+
 # --- DIFFERENCE CHECK ---
 def diff_signal_parts(old_signal, new_signal):
     if not old_signal:
@@ -112,11 +174,19 @@ def format_output(symbol, latest, previous, signal, is_crypto):
         else "🔻"
     )
 
-    # SMA200 distance
-    sma200_dist = ""
+    # SMA200 distance — extract raw float for colour calculation
+    sma200_dist_str = ""
+    sma200_distance_pct = 0.0
     for p in current_parts:
         if "SMA200 Distance" in p:
-            sma200_dist = p
+            sma200_dist_str = p
+            try:
+                # e.g. "SMA200 Distance: +12.3%"
+                sma200_distance_pct = float(
+                    p.split(":")[1].strip().rstrip("%")
+                )
+            except (IndexError, ValueError):
+                sma200_distance_pct = 0.0
             break
 
     # RSI with momentum arrow
@@ -127,8 +197,8 @@ def format_output(symbol, latest, previous, signal, is_crypto):
         rsi_arrow = "↘️"
     rsi_status = f"RSI:{latest.rsi:.0f}{rsi_arrow}"
 
-    status_parts = [flag, f"{above_sma200}SMA200", sma200_dist, rsi_status]
-    status_parts = [p for p in status_parts if p]  # drop any empty strings
+    status_parts = [flag, f"{above_sma200}SMA200", sma200_dist_str, rsi_status]
+    status_parts = [p for p in status_parts if p]
 
     main_line = (
         f"{symbol}: {currency}{price_fmt.format(current_close)}{suffix} "
@@ -142,17 +212,18 @@ def format_output(symbol, latest, previous, signal, is_crypto):
         current = part.split("(was:")[0].strip()
 
         if "(was:" in part:
-            if "ABOVE SMA200" in current and "BELOW SMA200" in part.split("(was:")[1]:
+            was_part = part.split("(was:")[1]
+            if "ABOVE SMA200" in current and "BELOW SMA200" in was_part:
                 key_changes.append("✅ Broke ABOVE SMA200")
-            elif "BELOW SMA200" in current and "ABOVE SMA200" in part.split("(was:")[1]:
+            elif "BELOW SMA200" in current and "ABOVE SMA200" in was_part:
                 key_changes.append("🔻 Broke BELOW SMA200")
-            elif "Bull Flag" in current and "Bear Flag" in part.split("(was:")[1]:
+            elif "Bull Flag" in current and "Bear Flag" in was_part:
                 key_changes.append("📈 Turned BULLISH")
-            elif "Bear Flag" in current and "Bull Flag" in part.split("(was:")[1]:
+            elif "Bear Flag" in current and "Bull Flag" in was_part:
                 key_changes.append("📉 Turned BEARISH")
-            elif "Weekly UP" in current and "Weekly DOWN" in part.split("(was:")[1]:
+            elif "Weekly UP" in current and "Weekly DOWN" in was_part:
                 key_changes.append("🔼 Weekly UP")
-            elif "Weekly DOWN" in current and "Weekly UP" in part.split("(was:")[1]:
+            elif "Weekly DOWN" in current and "Weekly UP" in was_part:
                 key_changes.append("🔽 Weekly DOWN")
             elif "RSI" in current:
                 if "OVERSOLD" in current:
@@ -168,11 +239,13 @@ def format_output(symbol, latest, previous, signal, is_crypto):
                         f"🟡 RSI cooling ({latest.rsi:.0f}→oversold)"
                     )
 
-    if key_changes:
-        changes_line = f" {' | '.join(key_changes)}"
-        return f"{main_line}\n{changes_line}"
-    else:
-        return main_line
+    changes_line = f" {' | '.join(key_changes)}" if key_changes else ""
+
+    # Log plain text version
+    plain = f"{main_line}\n{changes_line}" if changes_line else main_line
+    logging.info(plain)
+
+    return format_asset_html(main_line, changes_line, sma200_distance_pct)
 
 
 # --- VOLUME COLOR DETECTION ---
@@ -194,7 +267,6 @@ def get_volume_color(df, latest_idx):
 def generate_signal(df, latest, prev):
     sma200 = latest.sma200
 
-    # Bull / bear based purely on price vs SMA200
     if latest.close > sma200:
         flag = "📈 Bull Flag (Price ABOVE SMA200)"
     else:
@@ -205,18 +277,14 @@ def generate_signal(df, latest, prev):
         else "🔻 Price BELOW SMA200"
     )
 
-    # Distance from SMA200 as a percentage
     sma200_distance = ((latest.close - sma200) / sma200) * 100
     dist_sign = "+" if sma200_distance >= 0 else ""
-    sma200_dist_str = (
-        f"SMA200 Distance: {dist_sign}{sma200_distance:.1f}%"
-    )
+    sma200_dist_str = f"SMA200 Distance: {dist_sign}{sma200_distance:.1f}%"
 
     trend = (
         "🔼 Weekly UP" if latest.close > prev.close else "🔽 Weekly DOWN"
     )
 
-    # Volume analysis
     spike_ratio = latest.volume / latest.vol_avg if latest.vol_avg else 0
     volume_color = get_volume_color(df, len(df) - 1)
     volume_spike = ""
@@ -231,7 +299,6 @@ def generate_signal(df, latest, prev):
         elif volume_color == "red":
             volume_spike = "📊🔴 Weekly Volume: ⚠️ Strong Selling"
 
-    # RSI momentum
     rsi_change = latest.rsi - prev.rsi
     rsi_momentum = ""
     if abs(rsi_change) > 5:
@@ -239,7 +306,6 @@ def generate_signal(df, latest, prev):
         rsi_momentum = f"RSI {direction}"
 
     parts = [flag, trend, price_vs_sma200, sma200_dist_str]
-
     if volume_spike:
         parts.append(volume_spike)
     if rsi_momentum:
@@ -322,7 +388,6 @@ def analyse_asset(
         new_signals[symbol] = new_signal_raw
 
         output = format_output(symbol, latest, prev, full_signal, is_crypto)
-        logging.info(output)
         new_alerts.append(output)
 
     except Exception as e:

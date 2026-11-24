@@ -32,6 +32,22 @@ def save_signals(signals):
     with open(SIGNAL_FILE, "w") as f:
         json.dump(signals, f, indent=2)
 
+def build_email_html(alerts):
+    """Wrap coloured asset rows in a dark-background email shell."""
+    rows = "\n".join(alerts)
+    return f"""
+<html>
+<body style="background-color:#1a1a1a; padding:16px; margin:0;">
+  <div style="max-width:900px; margin:0 auto;">
+    <h2 style="color:#e0e0e0; font-family:sans-serif; margin-bottom:12px;">
+      📈 Weekly Market Summary
+    </h2>
+    {rows}
+  </div>
+</body>
+</html>
+"""
+
 # --- MAIN LOOP ---
 if __name__ == "__main__":
     prev_signals = load_previous_signals()
@@ -70,14 +86,13 @@ if __name__ == "__main__":
 
     # Send weekly summary email
     if new_alerts:
-        message = "\n\n".join(new_alerts)
         subject = f"📈 Weekly Market Summary ({len(new_alerts)} assets)"
-        send_email(subject, message.replace("\n", "<br>"))
+        send_email(subject, build_email_html(new_alerts))
         logging.info(
             f"✅ Sent weekly summary email with {len(new_alerts)} assets"
         )
     else:
-        logging.info("ℹ️ No assets to report today")
+        logging.info("ℹ️ No assets to report this week")
 
     # Save current signals for next run
     save_signals(new_signals)
