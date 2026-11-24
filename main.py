@@ -6,7 +6,10 @@ from data_feeds import fetch_crypto_data, fetch_stock_data
 from technical_analysis import analyse_asset
 
 # --- Setup Logging ---
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
 # --- CONFIG ---
 SIGNAL_FILE = "signals.json"
@@ -36,31 +39,43 @@ if __name__ == "__main__":
     new_alerts = []
 
     # Process crypto assets
-    logging.info(f"📊 Analyzing {len(crypto_symbols)} crypto assets (daily timeframe)...")
+    logging.info(
+        f"📊 Analyzing {len(crypto_symbols)} crypto assets "
+        f"(weekly timeframe)..."
+    )
     for symbol in crypto_symbols:
         try:
             df = fetch_crypto_data(symbol)
-            analyse_asset(symbol, df, is_crypto=True, prev_signals=prev_signals,
-                          new_signals=new_signals, new_alerts=new_alerts)
+            analyse_asset(symbol, df, is_crypto=True,
+                          prev_signals=prev_signals,
+                          new_signals=new_signals,
+                          new_alerts=new_alerts)
         except Exception as e:
             logging.error(f"Error fetching crypto {symbol}: {e}")
 
     # Process stock assets
-    logging.info(f"📊 Analyzing {len(stock_symbols)} stock assets (daily timeframe)...")
+    logging.info(
+        f"📊 Analyzing {len(stock_symbols)} stock assets "
+        f"(weekly timeframe)..."
+    )
     for ticker in stock_symbols:
         try:
             df = fetch_stock_data(ticker)
-            analyse_asset(ticker, df, is_crypto=False, prev_signals=prev_signals,
-                          new_signals=new_signals, new_alerts=new_alerts)
+            analyse_asset(ticker, df, is_crypto=False,
+                          prev_signals=prev_signals,
+                          new_signals=new_signals,
+                          new_alerts=new_alerts)
         except Exception as e:
             logging.error(f"Error fetching stock {ticker}: {e}")
 
-    # Send daily summary email
+    # Send weekly summary email
     if new_alerts:
         message = "\n\n".join(new_alerts)
-        subject = f"📈 Daily Market Summary ({len(new_alerts)} assets)"
+        subject = f"📈 Weekly Market Summary ({len(new_alerts)} assets)"
         send_email(subject, message.replace("\n", "<br>"))
-        logging.info(f"✅ Sent daily summary email with {len(new_alerts)} assets")
+        logging.info(
+            f"✅ Sent weekly summary email with {len(new_alerts)} assets"
+        )
     else:
         logging.info("ℹ️ No assets to report today")
 
